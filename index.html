@@ -156,6 +156,9 @@ input[type=number]{width:78px}
 .sets .cred p{margin:4px 0}
 .sets .outbtn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;margin-top:14px;border:0;border-radius:999px;background:#fff;color:#c4352c;font:inherit;font-size:17px;font-weight:600;cursor:pointer}
 .sets .outbtn.in{color:var(--green-deep)}
+.acctPanel{display:flex;flex-direction:column;gap:12px}
+.acctPanel[hidden]{display:none}
+.sets .prof[aria-expanded="true"] .chev::after{content:"⌄"}
 .sets .outbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 /* sign-in screen: soft light glass look in the app's green and gold */
 .auth{--a-ink:#123b2d;--a-mut:#5f7a6e;--a-g1:#1f8a52;--a-g2:#14664a;--a-gold:#e8ba62;
@@ -336,6 +339,14 @@ input[type=number]{width:78px}
 </header>
 
 <div class="sheet" id="sheet" hidden>
+  <div class="sets">
+    <button class="prof" id="acctBtn" type="button" aria-expanded="false" aria-controls="acctPanel">
+      <span class="av"><svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="#flogo"/></svg></span>
+      <span class="who"><b id="acctName">زائر</b><small id="acctSub">سجّل دخولك لتحتفظ ببياناتك</small></span>
+      <i class="chev"></i>
+    </button>
+  </div>
+  <div class="acctPanel" id="acctPanel" hidden>
   <div class="controls">
     <label class="field">السورة<select id="surah"><option>جارِ التحميل…</option></select></label>
     <label class="field">من آية<input id="from" type="number" min="1" value="1"></label>
@@ -367,13 +378,8 @@ input[type=number]{width:78px}
     <input id="debugText" type="text" placeholder="اكتب ما قرأته هنا (للتجربة بدون مايك)">
     <button class="btn" id="debugSend">إرسال</button>
   </div>
+  </div>
   <div class="sets">
-    <button class="prof" id="acctBtn" type="button">
-      <span class="av"><svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="#flogo"/></svg></span>
-      <span class="who"><b id="acctName">زائر</b><small id="acctSub">سجّل دخولك لتحتفظ ببياناتك</small></span>
-      <i class="chev"></i>
-    </button>
-
     <h3>التسميع</h3>
     <div class="grp">
       <label class="row"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0"/></svg><span>تنبيه صوتي عند الخطأ</span><input id="beep" class="sw" type="checkbox" checked></label>
@@ -2159,7 +2165,12 @@ function toggleSheet(open){
   sh.hidden=!open; $('#menuBtn').setAttribute('aria-expanded', open);
 }
 $('#menuBtn').onclick=()=>toggleSheet();
-$('#infoBox').onclick=()=>toggleSheet();
+function toggleAcctPanel(open){
+  const p=$('#acctPanel'); open = open===undefined ? p.hidden : open;
+  p.hidden=!open; $('#acctBtn').setAttribute('aria-expanded', open);
+}
+// the surah picker lives in the account panel: tapping the surah title opens the menu with it expanded
+$('#infoBox').onclick=()=>{ const o=$('#sheet').hidden; toggleSheet(o); if(o) toggleAcctPanel(true); };
 $('#load').onclick=()=>{ loadSelection(); toggleSheet(false); };
 $('#autoBtn').onclick=()=>{ toggleSheet(false); stopListening(); startDetect(); startListening(); };
 $('#modeBtn').onclick=()=>setMode(mode==='hide' ? 'read' : 'hide');
@@ -2627,7 +2638,7 @@ function authShow(){ if(FIREBASE_CONFIG.apiKey && !authUser && !store.get('q_aut
 function authPaint(){
   const on=!!FIREBASE_CONFIG.apiKey;
   $('#acctName').textContent = authUser ? (authUser.displayName||authUser.email||'مسجّل') : 'زائر';
-  $('#acctSub').textContent = authUser ? (authUser.displayName ? authUser.email||'' : 'مسجّل الدخول') : (on ? 'اضغط لتسجيل الدخول وحفظ بياناتك' : 'التسجيل غير متاح حاليًا');
+  $('#acctSub').textContent = authUser ? (authUser.displayName ? authUser.email||'' : 'مسجّل الدخول') : (on ? 'سجّل دخولك لتحتفظ ببياناتك' : 'التسجيل غير متاح حاليًا');
   $('#acctOut').hidden=!on;
   $('#acctOut').classList.toggle('in', !authUser);
   $('#acctOutLabel').textContent = authUser ? 'تسجيل الخروج' : 'تسجيل الدخول';
@@ -2688,7 +2699,7 @@ $('#authReset').onclick=()=>{
 };
 $('#authSkip').onclick=()=>{ store.set('q_auth_skip', 1); authForced=false; authPaint(); };
 const authOpen=()=>{ toggleSheet(false); closePanels(); authForced=true; authErr(''); authPaint(); };
-$('#acctBtn').onclick=()=>{ toggleSheet(false); if(!authUser && FIREBASE_CONFIG.apiKey) authOpen(); };
+$('#acctBtn').onclick=()=>toggleAcctPanel();
 $('#acctOut').onclick=()=>{ if(authUser) authDo(()=>fbMod.signOut(fbAuth)); else authOpen(); };
 $('#setStats').onclick=()=>{ toggleSheet(false); $('#statsBtn').click(); };
 authInit();
