@@ -1504,6 +1504,39 @@ async function startNative(){
   nFails=0; nativeStart();
 }
 
+/* Apps (Capacitor): the same Quran Whisper model, run natively by the FarisAudio plugin (native-audio/:
+   Kotlin on Android, Swift on iOS). Opt-in through the same "تعرّف محلي" switch. The plugin captures the
+   mic, splits phrases and decodes; it sends "preview" (live text) and "final" (finished phrase), the same
+   contract as the web engine below. */
+const FA = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+  && window.Capacitor.Plugins && window.Capacitor.Plugins.FarisAudio;
+let faOn=false, faInited=false;
+function faInit(){
+  if(faInited) return; faInited=true;
+  FA.addListener('modelProgress', d=>showMsg('جارِ تحميل نموذج التعرف المحلي (مرة واحدة فقط)… '+toAr(Math.round(100*d.p))+'٪'));
+  FA.addListener('preview', d=>{ if(!listening) return; preview(d.text); if(d.text) heard(d.text); });
+  FA.addListener('final', d=>{ if(d.text){ commitSpoken(d.text); heard(d.text); } preview(''); });
+  FA.addListener('error', d=>showMsg('خطأ في التعرف المحلي: '+d.message, true));
+  FA.addListener('stopped', ()=>{ faOn=false; if(listening){ listening=false; updateMic(); } });   // the app went to the background
+}
+async function startFarisNative(){
+  listening=true; updateMic(); showMsg(''); faInit();
+  try{
+    const st=await FA.status();
+    if(!st.modelReady && !confirm('التعرف المحلي يحمّل نموذجًا حجمه نحو ١٠٠ ميجا مرة واحدة، ثم يشتغل على جهازك بدون إنترنت. نكمل؟')){
+      listening=false; updateMic(); $('#localOn').checked=false; applyOpts(); return;
+    }
+    await FA.prepare(); showMsg('');
+    if(!listening) return;
+    await FA.start({isolate:$('#isoOn').checked});
+    faOn=true;
+  }catch(e){
+    listening=false; faOn=false; updateMic();
+    const m=String(e && (e.message||e));
+    showMsg(/mic_denied/.test(m) ? 'لازم تسمح للتطبيق باستخدام المايك عشان التسميع يشتغل.' : 'تعذّر تشغيل التعرف المحلي ('+m+'). عطّله من القائمة ☰ لتستخدم التعرف العادي.', true);
+  }
+}
+
 /* Local engine (opt-in, web only): a Whisper model fine-tuned on Quran recitation runs on this
    device through transformers.js (downloaded once, cached by the browser; audio never leaves the
    device). Whisper is not a streaming recognizer, so a small segmenter feeds it the current
@@ -1512,7 +1545,7 @@ async function startNative(){
 const LOCAL_LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/+esm';
 const LOCAL_MODEL='nael239/tasme3-whisper-base-ar-quran-web';
 const LOCAL_OK=!NSR && !window.claude && !!navigator.mediaDevices && !!window.AudioWorkletNode;
-$('#localRow').hidden=!LOCAL_OK; $('#tkRow').hidden=!LOCAL_OK;
+$('#localRow').hidden=!(LOCAL_OK||FA); $('#tkRow').hidden=!LOCAL_OK;
 /* The encoder is fed only as many mel frames as the clip has (min 10 s) instead of Whisper's fixed 30 s
    window, which is about 2-3x faster and gives the same text. */
 const LOCAL_WORKER=`import {pipeline, env} from '${LOCAL_LIB}';
@@ -1775,6 +1808,7 @@ function startListening(){
   if(!words.length || detecting) startDetect();
   else if(committed.pos>=words.length) reset();
   doneShown=false;
+  if(FA && $('#localOn').checked){ startFarisNative(); return; }
   if(NSR){ startNative(); return; }
   if(LOCAL_OK && $('#localOn').checked){ startLocal(); return; }
   if(dict){
@@ -1789,6 +1823,7 @@ function startListening(){
 }
 function stopListening(){
   listening=false;
+  if(FA && faOn){ faOn=false; FA.stop().catch(()=>{}); }
   if(NSR){ clearTimeout(nTimer); NSR.stop().catch(()=>{}); if(nSession){ commitSpoken(nSession); nSession=''; } }
   if(dict && dict.active()) dict.stop().catch(()=>{});
   stopLocal(); tkStop();
