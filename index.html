@@ -965,7 +965,8 @@ function dictFailed(code){
   listening=false; updateMic();
   if(code==='unavailable'){
     dict=null;
-    showMsg(SR ? 'خدمة الإملاء العربي مش متاحة هنا — اضغط المايك تاني لاستخدام التعرف على الصوت من المتصفح.' : 'التعرف على الصوت بالعربي مش متاح في المتصفح ده. استخدم Chrome أو Edge.', true);
+    // inside claude.ai the browser's own recognizer is blocked too, so send the reader to the site
+    showMsg('المايك مش بيشتغل جوه claude.ai — افتح البرنامج من الموقع: sayedfares.github.io/tasmee3', true);
   } else if(DICT_ERR[code]) showMsg(DICT_ERR[code], true);
 }
 if(window.claude && claude.use){
@@ -1031,7 +1032,7 @@ function startListening(){
     dict.start({language:'ar'}).catch(e=>{ if(e && e.code!=='stopped') dictFailed(e.code); });
     return;
   }
-  if(window.claude){ showMsg('المايك مش متاح في النسخة دي على claude.ai — افتح نسخة الموقع المستقلة من البرنامج.', true); return; }
+  if(window.claude){ showMsg('المايك مش بيشتغل جوه claude.ai — افتح البرنامج من الموقع: sayedfares.github.io/tasmee3', true); return; }
   if(!SR){ showMsg('المتصفح ده مش بيدعم التعرف على الصوت. استخدم Google Chrome أو Microsoft Edge.', true); return; }
   listening=true; updateMic();
   try{ startRec(); }catch{ listening=false; updateMic(); }
