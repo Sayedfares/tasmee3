@@ -1921,20 +1921,33 @@ function liftWord(i){
    their i'rab. The grammatical entries are lined up with the group's words in order. */
 const GRAM=/محل|مرفوع|منصوب|مجرور|مجزوم|مبني|مبتد|خبر|فاعل|مفعول|جار|صفة|بدل|معطوف|حرف|فعل|ضمير|نافية|عطف|مضاف|جملة|توكيد|حال|تمييز|ظرف|نائب|اسم|متعلق|مقدم|مؤخر|استئناف|الواو|الفاء|اللام|الباء|الهمزة|الميم|الكاف|الهاء/;
 let wTok=0;
+const irabCache=new WeakMap();
+function irabMap(d, s, ix){
+  let c=irabCache.get(d); if(!c) irabCache.set(d, c=new Map());
+  if(c.has(ix)) return c.get(ix);
+  const ents=[...d.t[ix].matchAll(/«([^»]+)»([^«]*)/g)].map(m=>({q:m[1].trim(), e:m[2].trim().replace(/\s*\n\s*(سورة|\[).*$/s,''), qt:tokenize(m[1])})).filter(x=>x.e && GRAM.test(x.e));
+  const group=[]; d.a.forEach((v,k)=>{ if(v===ix) group.push(k+1); });
+  const toks=[]; group.forEach(g=>ayahTokens(s, g, surahs[s-1].ayahs[g-1]).forEach((tx,j)=>toks.push({key:g+':'+j, n:norm(tx)})));
+  const has=(x,n)=>x.qt.some(q=>q===n || match(q, n));
+  // The book may list the hard words first and then give the i'rab of every word in order: try each place
+  // where the first word is quoted as the start and keep the alignment that covers most words.
+  const align=st=>{
+    const m=new Map(); let e=st;
+    for(const t of toks){
+      for(let k=e; k<Math.min(ents.length, e+6); k++) if(has(ents[k], t.n)){ m.set(t.key, ents[k]); e=k; break; }
+    }
+    return m;
+  };
+  let best=new Map();
+  if(toks.length){
+    const starts=ents.map((x,k)=>k).filter(k=>has(ents[k], toks[0].n));
+    for(const st of (starts.length ? starts : [0])){ const m=align(st); if(m.size>best.size) best=m; }
+  }
+  c.set(ix, best); return best;
+}
 function irabOf(d, s, a, wi){
   const ix=d.a[a-1]; if(ix==null || ix<0) return null;
-  let ents=[...d.t[ix].matchAll(/«([^»]+)»([^«]*)/g)].map(m=>({q:m[1].trim(), e:m[2].trim().replace(/\s*\n\s*(سورة|\[).*$/s,''), qt:tokenize(m[1])})).filter(x=>x.e && GRAM.test(x.e));
-  // a lexical pass over the same words may come first: use the second pass when the first quote repeats
-  if(ents.length>3){ const again=ents.findIndex((x,k)=>k>0 && x.qt[0]===ents[0].qt[0]); if(again>0 && again<ents.length*0.6) ents=ents.slice(again); }
-  const group=[]; d.a.forEach((v,k)=>{ if(v===ix) group.push(k+1); });
-  const toks=[]; group.forEach(g=>ayahTokens(s, g, surahs[s-1].ayahs[g-1]).forEach((tx,j)=>toks.push({a:g, j, n:norm(tx)})));
-  let e=0, found=null;
-  for(const t of toks){
-    let f=-1;
-    for(let k=e; k<Math.min(ents.length, e+5); k++) if(ents[k].qt.some(q=>q===t.n || match(q, t.n))){ f=k; break; }
-    if(f>=0){ e=f; if(t.a===a && t.j===wi){ found=ents[f]; break; } }
-  }
-  return found;
+  return irabMap(d, s, ix).get(a+':'+wi) || null;
 }
 function fillWordSheet(i){
   const w=words[i], s=curSurah, a=w.ayah, tok=++wTok;
