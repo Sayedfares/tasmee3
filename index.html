@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta charset="utf-8">
 <title>فارس</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -11,6 +12,7 @@
   --accent:#1f7a55; --accent-soft:#e3f1ea;
   --bad:#c0392b; --bad-soft:#fbe4e1; --skip:#a8650a; --skip-soft:#fbefd9;
   --hint:#2e6da4; --hint-soft:#e2edf7; --mask:#d9d3c3;
+  --paper:#fcf7e8; --ink:#1d1a12; --gold:#b8913a; --gold-ink:#7d5f1c; --frame:#e3d3a6; --banner:#f3e6bf;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -18,6 +20,7 @@
     --accent:#4fbf8b; --accent-soft:#1c3a2c;
     --bad:#ef6b5e; --bad-soft:#3d201d; --skip:#e3a94c; --skip-soft:#3a2e18;
     --hint:#6aa8e0; --hint-soft:#1b2b3c; --mask:#38413c; color-scheme:dark;
+    --paper:#1d1b15; --ink:#ece5cf; --gold:#c9a24e; --gold-ink:#d9b866; --frame:#3d3626; --banner:#2b271b;
   }
 }
 :root[data-theme="dark"]{
@@ -25,6 +28,7 @@
   --accent:#4fbf8b; --accent-soft:#1c3a2c;
   --bad:#ef6b5e; --bad-soft:#3d201d; --skip:#e3a94c; --skip-soft:#3a2e18;
   --hint:#6aa8e0; --hint-soft:#1b2b3c; --mask:#38413c; color-scheme:dark;
+  --paper:#1d1b15; --ink:#ece5cf; --gold:#c9a24e; --gold-ink:#d9b866; --frame:#3d3626; --banner:#2b271b;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:Tajawal,system-ui,sans-serif;font-size:16px}
@@ -45,8 +49,16 @@ input[type=number]{width:80px}
 button.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:9px 14px;cursor:pointer;min-height:40px}
 button.btn:hover{border-color:var(--accent)}
 button.btn:disabled{opacity:.5;cursor:default}
-.mushaf{margin-top:14px;padding:22px 18px;font-family:"Amiri Quran",Amiri,serif;font-size:30px;line-height:2.4;text-align:justify;min-height:200px}
-.basmala{text-align:center;margin-bottom:6px;color:var(--muted)}
+.mushaf{margin-top:14px;background:none;border:0;padding:0}
+.page{max-width:660px;margin:0 auto 20px;background:var(--paper);color:var(--ink);border:1px solid var(--frame);outline:4px double var(--gold);outline-offset:-11px;border-radius:6px;padding:26px 32px 16px}
+.ph,.pf{font-family:Tajawal,system-ui,sans-serif;font-size:13px;color:var(--gold-ink)}
+.ph{display:flex;justify-content:space-between;border-bottom:1px solid var(--frame);padding-bottom:4px;margin-bottom:6px}
+.pf{text-align:center;border-top:1px solid var(--frame);padding-top:4px;margin-top:6px;font-variant-numeric:tabular-nums}
+.pt{font-family:"Amiri Quran",Amiri,serif;font-size:28px;line-height:2.35;text-align:justify;text-align-last:center}
+.sura{margin:6px 0 2px;border:3px double var(--gold);border-radius:12px;background:var(--banner);text-align:center;font-size:.85em;line-height:1.9;color:var(--ink)}
+.basmala{text-align:center;color:var(--ink)}
+.an{display:inline-flex;align-items:center;justify-content:center;min-width:1.55em;height:1.55em;padding:0 .1em;font-family:Tajawal,system-ui,sans-serif;font-size:.55em;font-weight:700;line-height:1;color:var(--gold-ink);border:2px double var(--gold);border-radius:50%;vertical-align:middle;margin:0 .15em}
+.mushaf .empty{background:var(--card);border:1px solid var(--line);border-radius:14px}
 .w{padding:0 3px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s;user-select:none}
 .w.ok{color:var(--accent)}
 .w.bad{color:var(--bad);background:var(--bad-soft)}
@@ -80,7 +92,7 @@ button.btn:disabled{opacity:.5;cursor:default}
 .debug input{flex:1}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted);margin-top:10px}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:5px;vertical-align:middle;background:currentColor}
-@media (max-width:600px){.mushaf{font-size:24px;padding:16px 10px}.stats{gap:8px;font-size:13px}}
+@media (max-width:600px){.page{padding:22px 18px 12px;outline-offset:-8px}.pt{font-size:23px}.stats{gap:8px;font-size:13px}}
 @media (prefers-reduced-motion:reduce){.mic.on{animation:none}.w{transition:none}}
 </style>
 <div dir="rtl" lang="ar">
@@ -411,11 +423,20 @@ function alertError(){
   if(!$('#beep').checked) return;
   try{
     actx = actx || new (window.AudioContext||window.webkitAudioContext)();
-    const o=actx.createOscillator(), g=actx.createGain();
-    o.frequency.value=330; o.type='sine';
-    g.gain.setValueAtTime(0.15, actx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+0.25);
-    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+0.25);
+    // buzzer: two short, harsh low pulses (two slightly detuned square waves)
+    const t0=actx.currentTime, g=actx.createGain();
+    g.connect(actx.destination);
+    g.gain.setValueAtTime(0, t0);
+    [0, 0.24].forEach(at=>{
+      g.gain.setValueAtTime(0.12, t0+at);
+      g.gain.setValueAtTime(0.12, t0+at+0.17);
+      g.gain.linearRampToValueAtTime(0, t0+at+0.19);
+    });
+    [110, 116].forEach(f=>{
+      const o=actx.createOscillator();
+      o.type='square'; o.frequency.value=f;
+      o.connect(g); o.start(t0); o.stop(t0+0.45);
+    });
   }catch{}
 }
 
@@ -464,25 +485,41 @@ function renderSurah(n, f, t){
   $('#surah').value=n; $('#from').value=f; $('#to').value=t;
   $('#from').max=$('#to').max=s.numberOfAyahs;
   const box=$('#mushaf');
-  const data={ayahs:s.ayahs.map((text,i)=>({text, numberInSurah:i+1}))};
   box.innerHTML=''; words=[];
-  if(n!==1 && n!==9 && f===1){
-    const b=document.createElement('div'); b.className='basmala';
-    b.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; box.appendChild(b);
-  }
+  // Laid out on the pages of the Madani mushaf: a page always ends at the end of an ayah.
   const frag=document.createDocumentFragment();
-  data.ayahs.filter(a=>a.numberInSurah>=f && a.numberInSurah<=t).forEach(a=>{
-    ayahTokens(n, a.numberInSurah, a.text).forEach(tx=>{
+  const sName=s.name.replace(/^سُورَةُ\s*/,'');
+  let body=null, pageNo=0;
+  for(let ai=f-1; ai<t; ai++){
+    const an=ai+1;
+    if(s.pages[ai]!==pageNo){
+      pageNo=s.pages[ai];
+      const pg=document.createElement('section'); pg.className='page';
+      pg.innerHTML='<header class="ph"><span></span><span></span></header><div class="pt"></div><footer class="pf"></footer>';
+      const [hs, hj]=pg.querySelectorAll('.ph span');
+      hs.textContent=sName; hj.textContent='الجزء '+toAr(s.juz[ai]);
+      pg.querySelector('.pf').textContent=toAr(pageNo);
+      frag.appendChild(pg); body=pg.querySelector('.pt');
+    }
+    if(an===1){
+      const b=document.createElement('div'); b.className='sura'; b.textContent=s.name; body.appendChild(b);
+      if(n!==1 && n!==9){
+        const bs=document.createElement('div'); bs.className='basmala';
+        bs.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; body.appendChild(bs);
+      }
+    }
+    ayahTokens(n, an, s.ayahs[ai]).forEach(tx=>{
       const el=document.createElement('span');
       el.className='w'; el.textContent=tx;
       const idx=words.length;
       el.onclick=()=>jumpTo(idx);
-      words.push({text:tx, n:norm(tx), ayah:a.numberInSurah, el});
-      frag.appendChild(el); frag.appendChild(document.createTextNode(' '));
+      words.push({text:tx, n:norm(tx), ayah:an, el});
+      body.append(el, ' ');
     });
-    const an=document.createElement('span'); an.className='an'; an.textContent='﴿'+toAr(a.numberInSurah)+'﴾';
-    frag.appendChild(an); frag.appendChild(document.createTextNode(' '));
-  });
+    const mk=document.createElement('span'); mk.className='an'; mk.textContent=toAr(an);
+    mk.setAttribute('aria-label','آية '+toAr(an));
+    body.append(mk, ' ');
+  }
   box.appendChild(frag);
   reset();
   ['#mic','#hintBtn','#resetBtn'].forEach(id=>$(id).disabled=false);
