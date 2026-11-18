@@ -546,13 +546,15 @@ function commitSpoken(text){
   commitTokens(toks);
 }
 function commitTokens(toks){
-  const pos0=committed.pos;
+  const pos0=committed.pos, wrong0=committed.wrong||0;
   pending = align(committed, stripOpening(pending.concat(toks), committed), true);
   buzzFor(committed.wrong||0);
   trackProgress(pos0);
-  // lost track? the reader may have moved to another place
-  if(!autoMode) return;
-  lostBuf = committed.pos===pos0 ? lostBuf.concat(toks).slice(-12) : [];
+  // lost track? the reader may have moved to another place (a wrong word still moves the cursor on,
+  // so "lost" means most of what was just said did not match). Works in any selection, not only after auto-detect.
+  if(test) return;
+  const wrongNow=(committed.wrong||0)-wrong0;
+  lostBuf = wrongNow*2>=toks.length && toks.length ? lostBuf.concat(toks).slice(-12) : [];
   if(lostBuf.length>=6){
     const hit=locate(lostBuf.slice(-10), 5);
     if(hit){
