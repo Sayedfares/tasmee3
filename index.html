@@ -123,6 +123,8 @@ input[type=number]{width:78px}
 #msg{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(170px + env(safe-area-inset-bottom,0px));z-index:25;width:min(560px,calc(100% - 32px));pointer-events:none}
 .msg{background:var(--surface2);border:1px solid var(--edge);border-radius:12px;padding:10px 14px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);pointer-events:auto}
 .msg.warn{border-color:var(--bad);color:#ffd9d5}
+.idle{position:fixed;z-index:45;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 84px);max-width:420px;margin:0 auto;background:var(--surface2);border:1px solid var(--edge);border-radius:14px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:16px}
+.idle .acts{display:flex;gap:8px}
 
 /* bottom dock */
 .dock{position:fixed;inset:auto 0 0 0;z-index:20;background:linear-gradient(to top,var(--bar) 70%,color-mix(in srgb,var(--bar) 0%,transparent));
@@ -224,6 +226,10 @@ input[type=number]{width:78px}
 .wmenu .wq small{display:block;font-family:var(--ui);font-size:13px;color:var(--muted)}
 .wmenu .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .wmenu .acts .btn{min-height:50px}
+#dlList h3,#dlMushaf h3{margin:14px 0 8px;font-size:15px;color:var(--muted)}
+.juzs{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:8px;margin-top:8px}
+.juzs .mini.done{background:var(--green-deep);border-color:var(--green-deep);color:#fff}
+#dlList .btn{min-width:78px;padding:6px 12px}
 .bk-tabs{display:flex;flex-wrap:wrap;gap:8px}
 .bk-tabs button{border:1px solid var(--edge);background:var(--surface);border-radius:999px;padding:7px 16px;min-height:40px;cursor:pointer}
 .bk-tabs button[aria-pressed=true]{background:var(--green-deep);border-color:var(--green-deep);color:#fff}
@@ -263,6 +269,7 @@ input[type=number]{width:78px}
     <label class="field">من آية<input id="from" type="number" min="1" value="1"></label>
     <label class="field">إلى آية<input id="to" type="number" min="1" value="7"></label>
     <button class="btn primary" id="load">افتح السورة</button>
+    <button class="btn" id="dlBtn">تنزيل كتب وتفاسير</button>
   </div>
   <div class="toggles">
     <label class="chk"><input id="beep" type="checkbox" checked> تنبيه صوتي عند الخطأ</label>
@@ -351,6 +358,20 @@ input[type=number]{width:78px}
     <div class="credit">التفسير الميسر وكتب الإعراب من <a href="https://quranpedia.net" target="_blank" rel="noopener" style="color:inherit">الموسوعة القرآنية quranpedia.net</a> — نسخة البيانات ٢٠٢٦-٠٨-١٠</div>
   </div>
 </section>
+
+<section class="panel" id="dlPanel" hidden aria-label="تنزيل كتب وتفاسير">
+  <div class="ph"><h2>تنزيل كتب وتفاسير</h2><button class="ib" data-close aria-label="إغلاق">✕</button></div>
+  <div class="pb">
+    <div class="credit">التطبيق خفيف: حمّل اللي تحتاجه بس. الكتب بتتخزّن على جهازك وتشتغل بدون إنترنت بعد التنزيل، وبتظهر في تبويبات التفسير لما تضغط على أي كلمة.</div>
+    <div id="dlMushaf"></div>
+    <div id="dlList"></div>
+  </div>
+</section>
+
+<div class="idle" id="idleBox" role="alertdialog" aria-label="السكوت" hidden>
+  <div>هل تريد إغلاق الجلسة؟ <b id="idleSec">٣</b></div>
+  <div class="acts"><button class="btn" id="idleKeep">كمّل</button><button class="btn primary" id="idleStop">إغلاق</button></div>
+</div>
 
 <div class="wscrim" id="wScrim" hidden></div>
 <div class="wmenu" id="wMenu" hidden role="dialog" aria-label="إعراب الكلمة وتفسير الآية">
@@ -560,6 +581,7 @@ let dropNext=0, lastDetKey='';
 
 function commitSpoken(text){
   const toks=tokenize(text).slice(dropNext); dropNext=0;
+  if(toks.length) lastSpeech=Date.now();
   if(detecting){ detectFeed(toks, true); return; }
   commitTokens(toks);
 }
@@ -574,6 +596,7 @@ function commitTokens(toks){
   const wrongNow=(committed.wrong||0)-wrong0;
   lostBuf = lookedAway(wrongNow, toks.length) ? lostBuf.concat(toks).slice(-12) : [];
   if(lostBuf.length>=4) tryJump(lostBuf, 4);
+  else if(wrongNow>=1) tryUnique(toks);
 }
 
 /* Enough of what was just said missed the expected words that the reader may be somewhere else. The start of the
@@ -583,6 +606,14 @@ const lookedAway=(wrong, n)=>wrong>=2 && wrong*3>=n;
 
 /* The reader went somewhere else (another surah, before or after this one, or far in this one): if the
    words just said clearly belong to one place in the Quran, open it and continue there. */
+function tryUnique(toks){
+  const hit=locateUnique(toks);
+  if(!hit) return false;
+  const here=words[Math.min(committed.pos, words.length-1)];
+  if(flat.s[hit.i]===curSurah && here && Math.abs(flat.a[hit.i]-here.ayah)<=1) return false;     // just a slip nearby
+  lockOn(hit.i, hit.q);
+  return true;
+}
 function tryJump(toks, minScore){
   const hit=locate(toks.slice(-10), minScore);
   if(!hit) return false;
@@ -594,6 +625,7 @@ function tryJump(toks, minScore){
 
 function preview(interim){
   const toks=tokenize(interim).slice(dropNext);
+  if(toks.length) lastSpeech=Date.now();
   if(detecting){
     const key=toks.join(' ');
     if(toks.length && key!==lastDetKey){ lastDetKey=key; detectFeed(toks, false); }
@@ -604,6 +636,8 @@ function preview(interim){
     align(st, stripOpening(pending.concat(toks), st), false);
     // mostly wrong words: maybe the reader moved elsewhere. Decide on the live text, don't wait for the settled one.
     if(!test && toks.length>=4 && lookedAway(st.wrong-(committed.wrong||0), toks.length) && tryJump(toks, 4)){ dropNext=toks.length; return; }
+    // a distinctive ayah elsewhere: start there at once, without waiting for more words
+    if(!test && st.wrong-(committed.wrong||0)>=1 && tryUnique(toks)){ dropNext=toks.length; return; }
     buzzFor(st.wrong);
   }
   render(st);
@@ -671,12 +705,29 @@ function locate(q, minScore){
   return {i:best.i, q};
 }
 
+/* A distinctive ayah needs no long run-up: one long word, or two words in a row, that occur at exactly one
+   place in the whole Quran point straight there. Returns the first such place found in the spoken words. */
+function locateUnique(spoken){
+  if(!flat) return null;
+  for(let s=0; s<spoken.length && s<4; s++){
+    const q=spoken.slice(s), w=q[0];
+    if(w.length<3) continue;
+    const ps=positionsOf(w);
+    if(q.length>=2 && q[1].length>=3){
+      const c=ps.filter(p=>p+1<flat.n.length && match(q[1], flat.n[p+1]));
+      if(c.length===1) return {i:c[0], q};
+    }
+    if(w.length>=5 && ps.length===1) return {i:ps[0], q};
+  }
+  return null;
+}
+
 function detectFeed(toks, isFinal){
   const all=detBuf.concat(toks);
   if(isFinal) detBuf=all.slice(-20);
   let q=stripPrefix(stripPrefix(all, ISTIADHA), BASMALA);
   if(q.length>15) q=q.slice(-12);
-  const hit=locate(q);
+  const hit=locate(q) || locateUnique(q);
   if(hit){ if(!isFinal) dropNext=toks.length; lockOn(hit.i, hit.q); }
 }
 
@@ -824,7 +875,11 @@ async function init(){
     else onSurahChange();
     buildFlat();
     $('#mic').disabled=false; $('#autoBtn').disabled=false;
-    $('#mushaf').innerHTML='<div class="empty">دوس المايك الأخضر واقرأ من أي مكان<br>هيتعرّف على السورة والآية لوحده<br><br>أو اختار سورة من القائمة ☰</div>';
+    // the start screen is the Quran itself (where the reader left off, else Al-Fatiha); the mic follows
+    // wherever the reader goes from there
+    const n0 = saved ? +saved.s : 1, s0 = surahs[n0-1];
+    const f0 = saved ? Math.min(+saved.f||1, s0.numberOfAyahs) : 1, t0 = saved ? Math.min(Math.max(+saved.t||s0.numberOfAyahs, f0), s0.numberOfAyahs) : s0.numberOfAyahs;
+    renderSurah(n0, f0, t0);
   }catch(e){
     showMsg('تعذّر تحميل نص القرآن — أعد تحميل الصفحة.', true);
   }
@@ -915,35 +970,102 @@ function mushafLines(pn, n, f, t, s, els, body, c, L, pf){     // c = first cont
    Everything else on the page (other ayahs, other surahs) is shown dimmed. */
 const SVGNS='http://www.w3.org/2000/svg';
 const fahdOn = () => store.get('q_ed')==='fahd';
+const svgFetch=async pn=>{       // a downloaded page first; else the 382 MB of pages are only on the GitHub Pages site: the app and the artifact fetch them from there
+  const path='mushaf/ligature-basd-svg/'+String(pn).padStart(3,'0')+'.svg', site='https://sayedfares.github.io/tasmee3/'+path;
+  try{ const hit=window.caches && await (await caches.open('faris-mushaf')).match(site); if(hit) return hit.text(); }catch{}
+  let r=await fetch(path).catch(()=>null);
+  if(!r || !r.ok) r=await fetch(site);
+  if(!r.ok) throw 0;
+  return r.text();
+};
+const svgMetas=new Map();
+const svgMeta=pn=>{              // pn -> Map "surah:ayah" -> [{idx, im}] (every word's spelling), without keeping the big file
+  if(!svgMetas.has(pn)) svgMetas.set(pn, pn<1||pn>604 ? Promise.resolve(new Map()) : svgFetch(pn).then(t=>{
+    const m=new Map();
+    for(const x of t.matchAll(/<g id="md-word-\d+" data-surah="(\d+)" data-aya="(\d+)"[^>]*?data-imlaey="([^"]*)" data-word-index-in-ayah="(\d+)"/g)){
+      const k=+x[1]+':'+(+x[2]); if(!m.has(k)) m.set(k,[]); m.get(k).push({idx:+x[4], im:x[3]});
+    }
+    return m;
+  }).catch(()=>new Map()));
+  return svgMetas.get(pn);
+};
+/* The SVG cuts words finer than our display words: a leading «و» and every waqf sign (ۚ ۖ ۞ …) is its own
+   group. Join each of those to its word (a sign to the word before it, «و» and a leading sign to the word
+   after it): the n-th joined word is then our n-th display word. */
+function joinSvgWords(ws){
+  const groups=[]; let carry=false;
+  ws.forEach(({idx, im})=>{
+    const sign=!/[ء-ي]/.test(im);
+    if(carry || (sign && groups.length)){ groups[groups.length-1].push(idx); carry = carry && im==='و'; }
+    else{ groups.push([idx]); carry = im==='و' || sign; }
+  });
+  return groups;
+}
+function svgCrop(svg){           // needs the page to be displayed (getBBox): done again by fitPage when it is shown
+  if(svg.dataset.crop) return;
+  try{
+    const b=svg.querySelector('#md-page-inner').getBBox(), pad=4;
+    if(b.width>50 && b.height>50){ svg.setAttribute('viewBox', [b.x-pad, b.y-pad, b.width+2*pad, b.height+2*pad].join(' ')); svg.dataset.crop='1'; }
+  }catch{}
+}
 function mushafSvg(pn, n, s, els, pg, body){
   body.classList.add('svgp');
   // until the SVG arrives the page's placeholders sit in a hidden <svg>, so each word still knows its page
   const hold=document.createElementNS(SVGNS,'svg'); hold.setAttribute('width',0); hold.setAttribute('height',0); hold.style.position='absolute';
   for(const a in els) if(s.pages[a-1]===pn) els[a].forEach(e=>hold.appendChild(e));
-  body.appendChild(hold);
+  body.appendChild(hold); pg.svgHold=hold;
   let started=false;
   pg.svgLoad=async()=>{
     if(started) return; started=true;
     try{
-      const r=await fetch('mushaf/ligature-basd-svg/'+String(pn).padStart(3,'0')+'.svg');
-      if(!r.ok) throw 0;
-      const doc=new DOMParser().parseFromString(await r.text(), 'image/svg+xml');
+      // the 382 MB of pages are only on the GitHub Pages site: the app and the artifact fetch them from there
+      const doc=new DOMParser().parseFromString(await svgFetch(pn), 'image/svg+xml');
       if(doc.querySelector('parsererror')) throw 0;
       const svg=document.importNode(doc.documentElement, true);
       svg.removeAttribute('width'); svg.removeAttribute('height');
       svg.querySelectorAll(':scope > title, :scope > desc').forEach(e=>e.remove());
+      // The SVG cuts words finer than our display words: a leading «و» and every waqf sign (ۚ ۖ ۞ …) is its own
+      // group. Join each such group to its word, then the n-th joined word is our n-th display word.
+      const byAyah=new Map();
       svg.querySelectorAll('g[data-surah][data-aya]').forEach(g=>{
-        const list = +g.dataset.surah===n ? els[+g.dataset.aya] : null;
-        const mark = g.dataset.type==='aya-mark';
-        const el = list && (mark ? list[list.length-1] : list[+g.dataset['wordIndexInAyah']-1]);
-        if(!el){ g.classList.add('ctx'); return; }
-        while(g.firstChild) el.appendChild(g.firstChild);
-        g.replaceWith(el);
+        const k=+g.dataset.surah+':'+(+g.dataset.aya);
+        if(!byAyah.has(k)) byAyah.set(k, {sn:+g.dataset.surah, a:+g.dataset.aya, words:[], mark:null});
+        const e=byAyah.get(k);
+        if(g.dataset.type==='aya-mark') e.mark=g; else e.words.push(g);
       });
+      // An ayah that continues from / onto the next page is only partly on this page: its words are joined
+      // using the neighbouring pages' word lists too (small, cached).
+      const wordsOf=ws=>ws.map(g=>({idx:+g.dataset.wordIndexInAyah, im:g.dataset.imlaey||''})).sort((x,y)=>x.idx-y.idx);
+      let nb=null;
+      if([...byAyah.values()].some(e=>e.sn===n && els[e.a] && joinSvgWords(wordsOf(e.words)).length!==els[e.a].length-1))
+        nb=await Promise.all([svgMeta(pn-1), svgMeta(pn+1)]);
+      byAyah.forEach(({sn, a, words:ws, mark}, k)=>{
+        const list = sn===n ? els[a] : null;
+        let all=wordsOf(ws), groups=joinSvgWords(all);
+        if(list && nb && groups.length!==list.length-1){
+          const seen=new Set(all.map(x=>x.idx));
+          nb.forEach(m=>(m.get(k)||[]).forEach(x=>{ if(!seen.has(x.idx)){ seen.add(x.idx); all.push(x); } }));
+          groups=joinSvgWords(all.sort((x,y)=>x.idx-y.idx));
+        }
+        if(!list || groups.length!==list.length-1){ ws.forEach(g=>g.classList.add('ctx')); if(mark) mark.classList.add('ctx'); return; }   // does not line up: leave it as plain context
+        const byIdx=new Map(ws.map(g=>[+g.dataset.wordIndexInAyah, g]));
+        groups.forEach((idxs, i)=>{
+          const gs=idxs.map(x=>byIdx.get(x)).filter(Boolean); if(!gs.length) return;
+          const el=list[i];
+          gs.forEach(g=>{ while(g.firstChild) el.appendChild(g.firstChild); });
+          gs[0].replaceWith(el); gs.slice(1).forEach(g=>g.remove());
+        });
+        if(mark){ const el=list[list.length-1]; while(mark.firstChild) el.appendChild(mark.firstChild); mark.replaceWith(el); }
+      });
+      // words of an ayah that runs on to the next page stay with that page until it shows them
+      const nx=pg.nextElementSibling;
+      if(nx && nx.svgHold && nx.svgHold.isConnected) nx.svgHold.append(...hold.childNodes);
       hold.remove(); body.appendChild(svg);
+      // crop the printed margins (and the header / page number: the app bar shows those) so the text fills the screen
+      svgCrop(svg);
       fitPage();
     }catch(e){
-      body.innerHTML='<div class="empty">ملفات طبعة الملك فهد مش موجودة هنا — غيّر «طبعة المصحف» لسطور مصحف المدينة من القائمة ☰.</div>';
+      body.innerHTML='<div class="empty">تعذّر تحميل صفحة طبعة الملك فهد (محتاجة إنترنت) — غيّر «طبعة المصحف» لسطور مصحف المدينة من القائمة ☰.</div>';
     }
   };
 }
@@ -1144,8 +1266,19 @@ function startRec(){
       showMsg('التعرّف على الصوت يحتاج إنترنت. تأكد من الاتصال.', true);
     }
   };
-  rec.onend=()=>{ if(listening){ try{ startRec(); }catch{ listening=false; updateMic(); } } };
+  rec.onend=()=>restartRec();
   rec.start();
+}
+/* The browser ends a recognition session after a few seconds of silence (and now and then for no reason).
+   The session stays open from the reader's point of view: restart at once, and keep retrying briefly if the
+   old session is not fully gone yet, instead of giving up. */
+function restartRec(n=0){
+  if(!listening) return;
+  try{ startRec(); }
+  catch{
+    if(n<40) setTimeout(()=>restartRec(n+1), 200);
+    else{ listening=false; updateMic(); showMsg('وقف المايك — دوس عليه تاني.', true); }
+  }
 }
 
 /* Claude dictation (when hosted on claude.ai), with the browser's own recognizer as fallback */
@@ -1192,8 +1325,8 @@ if(NSR){
     clearTimeout(nTimer);
     nTimer=setTimeout(()=>{            // give the final result a moment to arrive
       if(nSession){ commitSpoken(nSession); nSession=''; render(committed); }
-      if(listening) setTimeout(nativeStart, 150);
-    }, 500);
+      if(listening) setTimeout(nativeStart, 60);
+    }, 300);
   });
 }
 function nativeStart(){
@@ -1202,7 +1335,8 @@ function nativeStart(){
   NSR.start({language:'ar-SA', partialResults:true, popup:false, maxResults:1}).catch(err=>{
     const m=String(err && err.message || err);
     if(/permission/i.test(m)){ listening=false; updateMic(); showMsg('لازم تسمح للتطبيق باستخدام المايك من إعدادات الموبايل.', true); return; }
-    if(++nFails>8){ listening=false; updateMic(); showMsg('التعرف على الصوت وقف — دوس المايك تاني.', true); }
+    // silence makes starts fail now and then and the next session follows; only a long run of failures stops listening
+    if(++nFails>60){ listening=false; updateMic(); showMsg('التعرف على الصوت وقف — دوس المايك تاني.', true); }
   });
 }
 async function startNative(){
@@ -1465,7 +1599,25 @@ function tkStop(){
   if(TK.stop){ TK.stop(); TK.stop=null; }
 }
 
+/* Silence: after 5 s without a word the reader is asked "close the session?"; no answer within 3 s closes it. */
+let lastSpeech=0, idleEnd=0;
+const IDLE_ASK_MS=5000, IDLE_CLOSE_MS=3000;
+function idleHide(){ idleEnd=0; $('#idleBox').hidden=true; }
+$('#idleKeep').onclick=()=>{ lastSpeech=Date.now(); idleHide(); };
+$('#idleStop').onclick=()=>{ idleHide(); stopListening(); };
+setInterval(()=>{
+  if(!listening){ if(idleEnd) idleHide(); return; }
+  const now=Date.now();
+  if(!idleEnd){
+    if(now-lastSpeech>=IDLE_ASK_MS){ idleEnd=now+IDLE_CLOSE_MS; $('#idleBox').hidden=false; }
+    else return;
+  }
+  if(now>=idleEnd){ idleHide(); stopListening(); showMsg('اتقفلت الجلسة لأنك سكتّ. دوس المايك لما تكمّل.'); return; }
+  $('#idleSec').textContent=toAr(Math.ceil((idleEnd-now)/1000));
+}, 250);
+
 function startListening(){
+  lastSpeech=Date.now(); idleHide();
   if(LOCAL_OK && $('#tkOn').checked) tkStart();
   if(!words.length || detecting) startDetect();
   else if(committed.pos>=words.length) reset();
@@ -1844,6 +1996,7 @@ $('#edSel').onchange=async()=>{
   if(words.length && committed.pos===0) renderSurah(curSurah, +$('#from').value, +$('#to').value);
   else if(words.length) showMsg('طبعة المصحف هتتغيّر في الفتح الجاي للسورة.');
 };
+$('#dlBtn').onclick=()=>{ toggleSheet(false); dlOpen(); };
 $('#statsBtn').onclick=()=>{ renderStats(); openPanel('statsPanel'); };
 document.querySelectorAll('.panel [data-close]').forEach(b=>b.onclick=closePanels);
 $('#gAdd').onclick=()=>{
@@ -1918,6 +2071,14 @@ const PHONE=matchMedia('(max-width:480px)');
 function fitPage(){
   const box=$('#mushaf'), el=pageEl;
   const pt=el && el.isConnected && el.querySelector('.pt.lines');
+  const sv=el && el.isConnected && el.querySelector('.pt.svgp > svg[viewBox]');
+  if(sv){                                   // King Fahd page: crop the margins, fill the width, never taller than the screen
+    svgCrop(sv);
+    const dock=document.querySelector('.dock');
+    document.documentElement.style.setProperty('--dockh',(dock.offsetHeight+8)+'px');
+    const navH=pnav.hidden?0:pnav.offsetHeight+18;
+    sv.style.maxHeight=Math.max(240, innerHeight-dock.offsetHeight-8-navH-(box.getBoundingClientRect().top+scrollY))+'px';
+  }
   if(!pt){ box.style.removeProperty('--fs'); return; }
   const dock=document.querySelector('.dock');
   if(PHONE.matches) document.documentElement.style.setProperty('--dockh',(dock.offsetHeight+8)+'px');
@@ -2009,16 +2170,149 @@ function paperSound(){
    Books come from quranpedia.net, split per surah under books/<key>/<surah>.json as
    {t:[unique texts], a:[text index per ayah]}; i'rab books cover groups of ayahs, so
    several ayahs can point at the same text. Each surah file loads on first use. */
-const BOOKS=[{key:'tafsir', name:'التفسير الميسر'}, {key:'irab-daas', name:'إعراب الدعاس'}, {key:'irab-nahhas', name:'إعراب النحاس'}];
+const BASE_BOOKS=[{key:'tafsir', name:'التفسير الميسر'}, {key:'irab-daas', name:'إعراب الدعاس'}, {key:'irab-nahhas', name:'إعراب النحاس'}];
+const books = () => BASE_BOOKS.concat(Object.entries(store.get('q_dl')||{}).map(([key,v])=>({key, name:v.name, whole:true})));
 const bookFiles=new Map();
 let bk={key:'tafsir', s:0, a:0}, wSel=-1;
 
 function bookFile(key, s){
   const id=key+'/'+s;
-  if(!bookFiles.has(id)) bookFiles.set(id, fetch('books/'+id+'.json').then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }));
+  if(!bookFiles.has(id)) bookFiles.set(id, BASE_BOOKS.some(b=>b.key===key)
+    ? fetch('books/'+id+'.json').then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+    : surahOfWhole(key, s));
   const p=bookFiles.get(id);
   p.catch(()=>bookFiles.delete(id));      // let a failed load be retried
   return p;
+}
+
+/* ---------- Optional downloads ----------
+   Books beyond the three bundled ones live in github.com/Sayedfares/tasmee3_books as one JSON per book
+   ({"<surah>:<ayah>": {text}}). The user downloads the ones they want; each is kept in the browser's
+   Cache Storage ('faris-books') and read from there, so it works offline afterwards. */
+const BOOKS_BASE='https://raw.githubusercontent.com/Sayedfares/tasmee3_books/main/';
+const DL_GROUPS={tafsir:'كتب التفسير', irab:'الإعراب وتحليل الكلمات', trans:'ترجمات وتفاسير بلغات أخرى'};
+const bookCache = () => caches.open('faris-books');
+let catalog=null, wholeKey=null, wholeData=null;
+function plainText(h){                         // book texts carry HTML: keep paragraphs, drop the markup
+  if(!/[<&]/.test(h)) return h.trim();
+  const d=new DOMParser().parseFromString(h.replace(/<\/(p|div|h\d|li)>|<br\s*\/?>/gi,'\n'), 'text/html');
+  return (d.body.textContent||'').replace(/\n{3,}/g,'\n\n').trim();
+}
+async function surahOfWhole(key, s){           // -> {t:[unique texts], a:[text index per ayah]} like the bundled files
+  if(wholeKey!==key){
+    const r=await (await bookCache()).match(BOOKS_BASE+key+'.json');
+    if(!r) throw new Error('not downloaded');
+    wholeData=await r.json(); wholeKey=key;     // only one whole book is kept parsed in memory
+  }
+  const t=[], a=[], seen=new Map();
+  for(let ai=1; ai<=surahs[s-1].numberOfAyahs; ai++){
+    const e=wholeData[s+':'+ai], x=e ? plainText(e.text ?? e.t ?? '') : '';
+    if(!x){ a.push(-1); continue; }
+    if(!seen.has(x)){ seen.set(x, t.length); t.push(x); }
+    a.push(seen.get(x));
+  }
+  return {t, a};
+}
+async function dlDownload(item, onProg){
+  const url=BOOKS_BASE+item.key+'.json', r=await fetch(url);
+  if(!r.ok) throw new Error(r.status);
+  const total=+r.headers.get('content-length') || item.mb*1e6; let got=0; const chunks=[], rd=r.body.getReader();
+  for(;;){ const {done, value}=await rd.read(); if(done) break; chunks.push(value); got+=value.length; onProg(Math.min(1, got/total)); }
+  await (await bookCache()).put(url, new Response(new Blob(chunks), {headers:{'content-type':'application/json'}}));
+  const m=store.get('q_dl')||{}; m[item.key]={name:item.name}; store.set('q_dl', m);
+}
+async function dlRemove(item){
+  try{ await (await bookCache()).delete(BOOKS_BASE+item.key+'.json'); }catch{}
+  const m=store.get('q_dl')||{}; delete m[item.key]; store.set('q_dl', m);
+  if(wholeKey===item.key){ wholeKey=wholeData=null; }
+  [...bookFiles.keys()].forEach(k=>{ if(k.startsWith(item.key+'/')) bookFiles.delete(k); });
+}
+/* Mushaf shapes: the King Fahd edition pages (604 SVG files, ~382 MB) can be kept on the device, all at once
+   or one juz at a time; a page that is not stored is fetched online as it is shown. */
+const MUSHAF_CACHE='faris-mushaf', FAHD_MB=382;
+async function dlMushaf(){
+  const box=$('#dlMushaf'); box.textContent='';
+  if(!window.caches) return;
+  const cache=await caches.open(MUSHAF_CACHE);
+  const have=new Set((await cache.keys()).map(r=>+r.url.match(/(\d{3})\.svg$/)[1]));
+  const start={}; surahs.forEach(s=>s.ayahs.forEach((_,ai)=>{ const j=s.juz[ai], p=s.pages[ai]; if(!(j in start) || p<start[j]) start[j]=p; }));
+  const range=j=>{ const a=start[j], b=j<30 ? start[j+1]-1 : 604, r=[]; for(let p=a;p<=b;p++) r.push(p); return r; };
+  const h=document.createElement('h3'); h.textContent='أشكال المصحف'; box.appendChild(h);
+  const card=document.createElement('ul'); card.className='list'; box.appendChild(card);
+  const li=document.createElement('li'), nm=document.createElement('div'); nm.className='grow';
+  nm.textContent='طبعة الملك فهد (صفحات مصوّرة)';
+  const sm=document.createElement('small'); nm.appendChild(sm);
+  const all=document.createElement('button'); all.className='btn'; li.append(nm, all); card.appendChild(li);
+  const chips=document.createElement('div'); chips.className='juzs'; box.appendChild(chips);
+  const chipOf={};
+  const paint=()=>{
+    const n=have.size; sm.textContent=toAr(FAHD_MB)+' ميجا كاملة — محفوظ '+toAr(n)+' من ٦٠٤ صفحة';
+    all.textContent = n===604 ? 'حذف' : 'تنزيل الكل'; all.disabled=false;
+    for(let j=1;j<=30;j++){ const done=range(j).every(p=>have.has(p)); chipOf[j].classList.toggle('done', done); chipOf[j].disabled=false; }
+  };
+  const get=async(pages, btn)=>{
+    const todo=pages.filter(p=>!have.has(p)); let done=0, fail=false;
+    const show=()=>{ if(btn===all) all.textContent=toAr(Math.round(100*done/todo.length))+'٪'; };
+    await Promise.all([0,1,2].map(async()=>{
+      while(todo.length && !fail){
+        const p=todo.shift();
+        try{
+          const key='https://sayedfares.github.io/tasmee3/mushaf/ligature-basd-svg/'+String(p).padStart(3,'0')+'.svg';
+          let r=await fetch('mushaf/ligature-basd-svg/'+String(p).padStart(3,'0')+'.svg').catch(()=>null);
+          if(!r || !r.ok) r=await fetch(key);
+          if(!r.ok) throw 0;
+          await cache.put(key, new Response(await r.blob(), {headers:{'content-type':'image/svg+xml'}}));
+          have.add(p); done++; show();
+        }catch{ fail=true; }
+      }
+    }));
+    if(fail) showMsg('تعذّر إكمال التنزيل — تأكد من الاتصال ومن مساحة التخزين وحاول تاني.', true);
+    paint();
+  };
+  all.onclick=async()=>{
+    all.disabled=true;
+    if(have.size===604){ for(const k of await cache.keys()) await cache.delete(k); have.clear(); paint(); return; }
+    await get(Array.from({length:604}, (_,i)=>i+1), all);
+  };
+  const lab=document.createElement('div'); lab.className='credit'; lab.textContent='أو نزّل جزء جزء:'; box.appendChild(lab); box.appendChild(chips);
+  for(let j=1;j<=30;j++){
+    const c=document.createElement('button'); c.className='mini'; c.textContent=toAr(j); c.title='جزء '+toAr(j)+' (حوالي '+toAr(Math.round(FAHD_MB*range(j).length/604))+' ميجا)';
+    c.onclick=async()=>{ c.disabled=true; c.textContent='…'; await get(range(j), c); c.textContent=toAr(j); };
+    chipOf[j]=c; chips.appendChild(c);
+  }
+  paint();
+}
+async function dlOpen(){
+  openPanel('dlPanel');
+  dlMushaf().catch(()=>{});
+  const box=$('#dlList'); box.textContent='جارِ التحميل…';
+  if(!window.caches){ box.textContent='التنزيل مش متاح في المتصفح ده.'; return; }
+  try{
+    if(!catalog){ const r=await fetch(BOOKS_BASE+'catalog.json'); if(!r.ok) throw 0; catalog=await r.json(); store.set('q_cat', catalog); }
+  }catch{ catalog=store.get('q_cat'); }
+  if(!catalog){ box.textContent='تعذّر تحميل قائمة الكتب — تأكد من الاتصال بالإنترنت وحاول تاني.'; return; }
+  box.textContent='';
+  Object.keys(DL_GROUPS).forEach(g=>{
+    const items=catalog.filter(c=>c.group===g); if(!items.length) return;
+    const h=document.createElement('h3'); h.textContent=DL_GROUPS[g]; box.appendChild(h);
+    const ul=document.createElement('ul'); ul.className='list'; box.appendChild(ul);
+    items.forEach(it=>{
+      const li=document.createElement('li');
+      const nm=document.createElement('div'); nm.className='grow'; nm.textContent=it.name;
+      const sz=document.createElement('small'); sz.textContent=toAr(Math.round(it.mb*10)/10)+' ميجا'; nm.appendChild(sz);
+      const btn=document.createElement('button'); btn.className='btn';
+      const have=()=>!!(store.get('q_dl')||{})[it.key];
+      const paint=()=>{ btn.textContent=have()?'حذف':'تنزيل'; btn.disabled=false; };
+      btn.onclick=async()=>{
+        if(have()){ await dlRemove(it); paint(); return; }
+        btn.disabled=true;
+        try{ await dlDownload(it, p=>{ btn.textContent=toAr(Math.round(p*100))+'٪'; }); showMsg('اتنزّل «'+it.name+'» — هتلاقيه في تبويبات التفسير (اضغط على أي كلمة).'); }
+        catch(e){ showMsg('تعذّر تنزيل «'+it.name+'» — تأكد من الاتصال ومن مساحة التخزين.', true); }
+        paint();
+      };
+      paint(); li.append(nm, btn); ul.appendChild(li);
+    });
+  });
 }
 
 function openWordMenu(i){
@@ -2100,10 +2394,10 @@ function fillWordSheet(i){
 
 async function showBook(key, s, a){
   bk={key, s, a};
-  const book=BOOKS.find(b=>b.key===key);
+  const book=books().find(b=>b.key===key) || BASE_BOOKS[0];
   $('#bkTitle').textContent=book.name+' — '+sName(s);
   const tabs=$('#bkTabs'); tabs.textContent='';
-  BOOKS.forEach(b=>{
+  books().forEach(b=>{
     const t=document.createElement('button'); t.textContent=b.name; t.setAttribute('aria-pressed', b.key===key);
     t.onclick=()=>showBook(b.key, bk.s, bk.a); tabs.appendChild(t);
   });
