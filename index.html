@@ -91,6 +91,11 @@ input[type=number]{width:78px}
 .empty{color:var(--muted);text-align:center;padding:70px 10px;line-height:1.9}
 
 .w{padding:0 2px;border-radius:10px;cursor:pointer;transition:color .2s,background .2s,filter .2s;user-select:none;-webkit-user-select:none}
+.pt.svgp svg{display:block;width:100%;height:auto;max-height:calc(100vh - var(--dockh,0px) - 150px);margin:0 auto;fill:currentColor;color:var(--ink)}
+.pt.svgp{background:none}
+.pt.svgp .w{padding:0;transition:none}
+.pt.svgp .w.cur path{stroke:var(--green);stroke-width:.5}
+.pt.svgp .empty{padding:60px 0;text-align:center;color:var(--muted)}
 .ctx{opacity:.4;padding:0 2px;user-select:none;-webkit-user-select:none}   /* ayahs before the start: context only */
 .w.ok{color:var(--green)}
 .w.ok [class^="t-"]{color:inherit}           /* a recited word turns fully green, tajweed colors included */
@@ -264,6 +269,7 @@ input[type=number]{width:78px}
     <label class="chk"><input id="tjOn" type="checkbox" checked> ألوان التجويد</label>
     <label class="chk"><input id="simOn" type="checkbox"> إظهار المتشابهات</label>
     <label class="chk"><input id="recOn" type="checkbox" checked> سجّل صوتي عند الخطأ</label>
+    <label class="chk">طبعة المصحف <select id="edSel"><option value="lines">سطور مصحف المدينة</option><option value="fahd">طبعة الملك فهد</option></select></label>
     <label class="chk" id="tkRow" hidden><input id="tkOn" type="checkbox"> مراجعة التشكيل أثناء القراءة (تجريبي، تحميل نحو ٢٤٠ ميجا)</label>
     <label class="chk" id="localRow" hidden><input id="localOn" type="checkbox"> تعرّف محلي على جهازك بدون إنترنت (تجريبي، تحميل نحو ١٠٠ ميجا)</label>
   </div>
@@ -704,7 +710,7 @@ function render(st){
       else if(p.s==='hint' && m && m.s==='ok') m=p;
     }
     let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(m&&m.shown?' shown':'')+(m&&m.s==='bad'&&peek.has(i)?' peek':'')+(cur?' cur':'')+(simWord(i)?' sm':'')+(TK.map.has(i)?' tk':'');
-    if(w.el.className!==c) w.el.className=c;
+    if(w.el.getAttribute('class')!==c) w.el.setAttribute('class',c);       // attribute: also works on SVG elements
     w.el.title = m && m.s==='bad' ? 'سُمع: '+m.said : TK.map.has(i) ? 'تشكيل: سُمع «'+TK.map.get(i).said+'» والصحيح «'+TK.map.get(i).exp+'»' : '';
   }
   updateInfo(st);
@@ -870,7 +876,46 @@ function mushafLines(pn, n, f, t, s, els, body, c=f){     // c = first context a
     els[a].forEach(el=>{ if(!used.has(el) && last) last.appendChild(el); });
   }
 }
-function mushafFlow(pn, n, f, t, s, els, body){           // without mushaf.json: plain running text
+/* "King Fahd edition": the printed page as an SVG (mushaf/ligature-basd-svg/NNN.svg, one file per page,
+   every word and ayah mark a group tagged with surah / ayah / word index). The tracked word elements are
+   empty <g> placeholders made in renderSurah; when the page is first shown (lazily, the files are big)
+   the SVG's own word groups are moved into them, so tracking, colors, clicks and masking work as usual.
+   Everything else on the page (other ayahs, other surahs) is shown dimmed. */
+const SVGNS='http://www.w3.org/2000/svg';
+const fahdOn = () => store.get('q_ed')==='fahd';
+function mushafSvg(pn, n, s, els, pg, body){
+  body.classList.add('svgp');
+  // until the SVG arrives the page's placeholders sit in a hidden <svg>, so each word still knows its page
+  const hold=document.createElementNS(SVGNS,'svg'); hold.setAttribute('width',0); hold.setAttribute('height',0); hold.style.position='absolute';
+  for(const a in els) if(s.pages[a-1]===pn) els[a].forEach(e=>hold.appendChild(e));
+  body.appendChild(hold);
+  let started=false;
+  pg.svgLoad=async()=>{
+    if(started) return; started=true;
+    try{
+      const r=await fetch('mushaf/ligature-basd-svg/'+String(pn).padStart(3,'0')+'.svg');
+      if(!r.ok) throw 0;
+      const doc=new DOMParser().parseFromString(await r.text(), 'image/svg+xml');
+      if(doc.querySelector('parsererror')) throw 0;
+      const svg=document.importNode(doc.documentElement, true);
+      svg.removeAttribute('width'); svg.removeAttribute('height');
+      svg.querySelectorAll(':scope > title, :scope > desc').forEach(e=>e.remove());
+      svg.querySelectorAll('g[data-surah][data-aya]').forEach(g=>{
+        const list = +g.dataset.surah===n ? els[+g.dataset.aya] : null;
+        const mark = g.dataset.type==='aya-mark';
+        const el = list && (mark ? list[list.length-1] : list[+g.dataset['wordIndexInAyah']-1]);
+        if(!el){ g.classList.add('ctx'); return; }
+        while(g.firstChild) el.appendChild(g.firstChild);
+        g.replaceWith(el);
+      });
+      hold.remove(); body.appendChild(svg);
+      fitPage();
+    }catch(e){
+      body.innerHTML='<div class="empty">ملفات طبعة الملك فهد مش موجودة هنا — غيّر «طبعة المصحف» لسطور مصحف المدينة من القائمة ☰.</div>';
+    }
+  };
+}
+function mushafFlow(pn, n, f, t, s, els, body){          // without mushaf.json: plain running text
   if(f===1 && s.pages[0]===pn){
     body.before(suraBanner(s));
     if(n!==1 && n!==9){ const bs=document.createElement('div'); bs.className='basmala'; bs.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; body.before(bs); }
@@ -880,6 +925,14 @@ function mushafFlow(pn, n, f, t, s, els, body){           // without mushaf.json
 
 function renderSurah(n, f, t){
   const s=surahs[n-1];
+  const svgMode=fahdOn();
+  // display element: a <span> with text, or (King Fahd edition) an empty <g> the page's SVG words move into
+  const mkEl=(cls, html, text)=>{
+    const e=svgMode ? document.createElementNS(SVGNS,'g') : document.createElement('span');
+    e.setAttribute('class', cls);
+    if(!svgMode){ if(html) e.innerHTML=html; else e.textContent=text; }
+    return e;
+  };
   curSurah=n;
   $('#surah').value=n; $('#from').value=f; $('#to').value=t;
   $('#from').max=$('#to').max=s.numberOfAyahs;
@@ -898,13 +951,10 @@ function renderSurah(n, f, t){
     const plain=ayahTokens(n, an, s.ayahs[ai]);
     const list=els[an]=[]; let pi=0;
     uthmaniWords(n, ai, plain.length).forEach(dw=>{
-      const el=document.createElement('span');
-      el.className='ctx';
-      if(dw.html) el.innerHTML=dw.html; else el.textContent=plain[pi];
+      const el=mkEl('ctx', dw.html, plain[pi]);
       pi+=dw.k; list.push(el);
     });
-    const mk=document.createElement('span'); mk.className='an ctx'; mk.textContent=toAr(an);
-    list.push(mk);
+    list.push(mkEl(svgMode ? 'ctx' : 'an ctx', null, toAr(an)));
   }
   for(let ai=f-1; ai<t; ai++){
     const an=ai+1;
@@ -917,9 +967,7 @@ function renderSurah(n, f, t){
     const disp=uthmaniWords(n, ai, plain.length);
     let pi=0; const list=els[an]=[];
     disp.forEach(dw=>{
-      const el=document.createElement('span');
-      el.className='w';
-      if(dw.html) el.innerHTML=dw.html; else el.textContent=plain[pi];
+      const el=mkEl('w', dw.html, plain[pi]);
       const lead=words.length;
       el.onclick=()=>wordClick(lead);
       for(let t=0; t<dw.k; t++, pi++){
@@ -928,20 +976,20 @@ function renderSurah(n, f, t){
       }
       list.push(el);
     });
-    const mk=document.createElement('span'); mk.className='an'; mk.textContent=toAr(an);
+    const mk=mkEl(svgMode ? '' : 'an', null, toAr(an));
     mk.setAttribute('aria-label','آية '+toAr(an));
     mk.dataset.s=n; mk.dataset.a=an;
     mk.onclick=()=>openSimilar(n, an);
     list.push(mk);
   }
   // the banner and basmala can sit at the bottom of the page before the first ayah's page
-  const bannerPage = mushaf && f===1 && mushaf[pageOrder[0]-2] && mushaf[pageOrder[0]-2].includes('h'+n) ? pageOrder[0]-1 : 0;
+  const bannerPage = !svgMode && mushaf && f===1 && mushaf[pageOrder[0]-2] && mushaf[pageOrder[0]-2].includes('h'+n) ? pageOrder[0]-1 : 0;
   if(bannerPage) pageOrder.unshift(bannerPage);
   pageOrder.forEach((pn,k)=>{
     const pg=document.createElement('section'); pg.className='page'; pg.dataset.pn=pn;
     if(k){ const d=document.createElement('div'); d.className='pdiv'; d.textContent='صفحة '+toAr(pn); pg.appendChild(d); }
     const body=document.createElement('div'); body.className='pt'; pg.appendChild(body);
-    (mushaf ? mushafLines(pn, n, f, t, s, els, body, c) : mushafFlow(pn, n, f, t, s, els, body));
+    (svgMode ? mushafSvg(pn, n, s, els, pg, body) : mushaf ? mushafLines(pn, n, f, t, s, els, body, c) : mushafFlow(pn, n, f, t, s, els, body));
     frag.appendChild(pg);
   });
   box.appendChild(frag);
@@ -1751,6 +1799,12 @@ function applyOpts(){
   $('#tjLegend').hidden=!$('#tjOn').checked;
   $('#mushaf').classList.toggle('sim', $('#simOn').checked);
 })();
+$('#edSel').value=fahdOn() ? 'fahd' : 'lines';
+$('#edSel').onchange=()=>{
+  store.set('q_ed', $('#edSel').value);
+  if(words.length && committed.pos===0) renderSurah(curSurah, +$('#from').value, +$('#to').value);
+  else if(words.length) showMsg('طبعة المصحف هتتغيّر في الفتح الجاي للسورة.');
+};
 $('#statsBtn').onclick=()=>{ renderStats(); openPanel('statsPanel'); };
 document.querySelectorAll('.panel [data-close]').forEach(b=>b.onclick=closePanels);
 $('#gAdd').onclick=()=>{
@@ -1793,6 +1847,7 @@ function setPage(el, animate){
   const old=pageEl, box=$('#mushaf');
   if(turning) turning();                    // finish a turn still running
   pageEl=el;
+  if(el.svgLoad) el.svgLoad();
   if(!old || !animate || !old.isConnected){
     pageList().forEach(p=>p.classList.toggle('on', p===el));
     updatePnav(); fitPage(); return;
