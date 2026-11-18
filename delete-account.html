@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>حذف الحساب والبيانات — فارس</title>
+<style>
+:root{color-scheme:dark light;--bg:#151616;--surface:#242626;--ink:#eeece4;--muted:#9aa09e;--edge:#3a3d3d;--green:#1f8a52;--bad:#e2463c}
+@media (prefers-color-scheme:light){:root{--bg:#fbfaf6;--surface:#fff;--ink:#1d2321;--muted:#5d6764;--edge:#d8d6cc}}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.9 Tajawal,system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:28px 18px 60px;display:flex;flex-direction:column;gap:12px}
+h1{font-size:26px;margin:0}
+p{margin:4px 0}
+.muted{color:var(--muted);font-size:14px}
+input,button{font:inherit;border-radius:10px;border:1px solid var(--edge);padding:10px 12px;min-height:44px;background:var(--surface);color:var(--ink)}
+button{cursor:pointer}
+button.primary{background:var(--green);border-color:var(--green);color:#fff}
+button.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+form{display:flex;flex-direction:column;gap:10px}
+.msg{min-height:22px;font-size:15px}
+a{color:inherit}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<h1>حذف حسابك وبياناتك</h1>
+<p>سجّل الدخول بنفس الحساب اللي استخدمته في «فارس»، وبعدين اضغط «حذف حسابي نهائيًا». الحذف بيمسح حسابك من Firebase (بريدك واسمك وصورتك ومعرّف الحساب) ومينفعش يتراجع عنه.</p>
+<p class="muted">بيانات جهازك (الإحصائيات والإعدادات والكتب المنزّلة) بتتحذف بمسح بيانات الموقع أو التطبيق من إعدادات المتصفح أو الجهاز.</p>
+
+<section id="signin">
+<form id="form">
+<input id="email" type="email" autocomplete="email" placeholder="البريد الإلكتروني" required>
+<input id="pass" type="password" autocomplete="current-password" placeholder="كلمة المرور" required>
+<button class="primary" type="submit">دخول بالإيميل</button>
+</form>
+<p class="muted" style="text-align:center">أو</p>
+<div style="display:flex;gap:10px;flex-direction:column">
+<button id="google">دخول بجوجل</button>
+<button id="facebook">دخول بفيس بوك</button>
+</div>
+</section>
+
+<section id="account" hidden>
+<p>الحساب المسجّل: <b id="who"></b></p>
+<button class="danger" id="del">حذف حسابي نهائيًا</button>
+<button id="out">تسجيل خروج بدون حذف</button>
+</section>
+
+<div class="msg" id="msg" role="status"></div>
+<p class="muted">لو مش قادر تدخل أو عايز تطلب الحذف بطريقة تانية، افتح طلب بعنوان «حذف حساب» على <a href="https://github.com/Sayedfares/tasmee3/issues">صفحة المشروع</a> وهنحذفه خلال ٣٠ يومًا. <a href="privacy.html">سياسة الخصوصية</a></p>
+</main>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, FacebookAuthProvider, deleteUser, signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+const auth=getAuth(initializeApp({apiKey:'AIzaSyA9OZxnMLK3kXeLbgUghv8exJ_W6aGqEyg', authDomain:'fares-c50c1.firebaseapp.com', projectId:'fares-c50c1', appId:'1:698947153909:web:f0acb741ebdd2755623abc'}));
+const $=s=>document.querySelector(s), say=t=>{ $('#msg').textContent=t||''; };
+const ERR={'auth/invalid-credential':'البريد أو كلمة المرور غلط.','auth/invalid-email':'البريد الإلكتروني مش صحيح.','auth/popup-closed-by-user':'اتقفلت نافذة التسجيل.','auth/network-request-failed':'مفيش اتصال بالإنترنت.','auth/too-many-requests':'محاولات كتير — استنى شوية.','auth/requires-recent-login':'سجّل دخول تاني وبعدها احذف.'};
+const run=async f=>{ say(''); try{ await f(); }catch(e){ say(ERR[e.code]||'حصلت مشكلة — حاول تاني.'); } };
+onAuthStateChanged(auth,u=>{ $('#signin').hidden=!!u; $('#account').hidden=!u; if(u) $('#who').textContent=u.email||u.displayName||'حسابك'; });
+$('#form').onsubmit=e=>{ e.preventDefault(); run(()=>signInWithEmailAndPassword(auth,$('#email').value.trim(),$('#pass').value)); };
+$('#google').onclick=()=>run(()=>signInWithPopup(auth,new GoogleAuthProvider()));
+$('#facebook').onclick=()=>run(()=>signInWithPopup(auth,new FacebookAuthProvider()));
+$('#out').onclick=()=>run(()=>signOut(auth));
+$('#del').onclick=()=>run(async()=>{
+  if(!confirm('هتحذف حسابك نهائيًا ومينفعش ترجّعه. متأكد؟')) return;
+  await deleteUser(auth.currentUser);
+  say('اتحذف حسابك وبياناتك من Firebase. شكرًا لاستخدامك فارس.');
+});
+</script>
+</body>
+</html>
