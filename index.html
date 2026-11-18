@@ -78,7 +78,7 @@ input[type=number]{width:78px}
 .w.bad{color:var(--bad);background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 35%,transparent),transparent)}
 .w.cur{box-shadow:inset 0 -2px 0 var(--green)}
 /* memorization: unread words vanish, leaving only the ruled lines; mistakes become red blurred marks */
-.mask .w:not(.ok):not(.hint):not(.skip){color:transparent}
+.mask .w:not(.ok):not(.hint):not(.skip):not(.shown){color:transparent}
 .mask .w.bad{background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 85%,transparent),transparent);filter:blur(5px)}
 .mask .w.skip{color:transparent;background:radial-gradient(closest-side,color-mix(in srgb,var(--skip) 80%,transparent),transparent);filter:blur(5px)}
 .mask .w.bad.peek{color:var(--bad);filter:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 30%,transparent),transparent)}
@@ -87,6 +87,10 @@ input[type=number]{width:78px}
 /* a mistake once recited correctly: green word, the red glow stays behind it */
 .w.bad:not(.open),
 .mask .w.bad:not(.open):not(.peek){color:color-mix(in srgb,var(--green) 55%,var(--ink));filter:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 40%,transparent),transparent)}
+
+/* missed 3 times: the app showed the word and moved on, so it stays visible in red */
+.w.bad.shown:not(.open),
+.mask .w.bad.shown:not(.open):not(.peek){color:var(--bad);filter:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 30%,transparent),transparent)}
 
 .errors{margin-top:30px;border-top:1px solid var(--edge);padding-top:14px}
 .errors h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:500}
@@ -127,7 +131,7 @@ input[type=number]{width:78px}
 .tj .t-n{color:#7ea6ff}.tj .t-p{color:#6f7dff}.tj .t-m{color:#5b6cff}.tj .t-o{color:#5f8bff}
 .tj .t-q{color:#ff5a5f}.tj .t-c{color:#f06ce0}.tj .t-f{color:#c56ff0}.tj .t-w{color:#7fd34a}
 .tj .t-i{color:#3fc7ff}.tj .t-a{color:#3fbf9a}.tj .t-u{color:#5fbf45}.tj .t-d,.tj .t-b{color:#a7a7a7}.tj .t-g{color:#ff9a3d}
-.mask .w:not(.ok):not(.hint):not(.skip) [class^="t-"]{color:transparent}
+.mask .w:not(.ok):not(.hint):not(.skip):not(.shown) [class^="t-"]{color:transparent}
 .w.bad [class^="t-"]{color:inherit}
 /* similar verses */
 .sim .w.sm{text-decoration:underline dotted color-mix(in srgb,#b28cff 80%,transparent);text-underline-offset:.35em;text-decoration-thickness:2px}
@@ -604,7 +608,7 @@ function render(st){
       if(p.s==='bad' && (!m || m.s!=='bad' || p.open)) m=p;
       else if(p.s==='hint' && m && m.s==='ok') m=p;
     }
-    let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(m&&m.s==='bad'&&peek.has(i)?' peek':'')+(cur?' cur':'')+(simWord(i)?' sm':'');
+    let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(m&&m.shown?' shown':'')+(m&&m.s==='bad'&&peek.has(i)?' peek':'')+(cur?' cur':'')+(simWord(i)?' sm':'');
     if(w.el.className!==c) w.el.className=c;
     w.el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
   }
@@ -781,7 +785,7 @@ function renderSurah(n, f, t){
     body.append(mk, ' ');
   }
   box.appendChild(frag);
-  logged.clear();
+  logged.clear(); shownToast.clear();
   reset();
   applySim();
   ['#mic','#hintBtn','#ayahBtn','#resetBtn'].forEach(id=>$(id).disabled=false);
@@ -1034,7 +1038,7 @@ function goalValue(type, d){
 function goalsMet(){ return S.goals.filter(g=>goalValue(g.type)>=g.target).length; }
 
 /* Called after recited words are committed: count what was just passed, log new mistakes. */
-const logged=new Set();
+const logged=new Set(), shownToast=new Set();
 function trackProgress(pos0){
   if(!words.length) return;
   const d=day(), sv=S.surahs[curSurah] || (S.surahs[curSurah]={words:0, mistakes:0});
@@ -1050,6 +1054,7 @@ function trackProgress(pos0){
   for(let i=pos0; i<=Math.min(committed.pos, words.length-1); i++){
     const m=committed.marks[i];
     if(m && m.s==='bad' && !logged.has(i)){ logged.add(i); logMistake(i, m.said); d.mistakes++; sv.mistakes++; }
+    if(m && m.shown && !shownToast.has(i)){ shownToast.add(i); showMsg(`الكلمة الصح: ${words[words[i].lead].text} — كمّل من بعدها`); }
   }
   if(goalsMet()>metBefore) showMsg('أحسنت! حقّقت هدف من أهداف النهارده 🎉');
   saveStats();
