@@ -84,6 +84,9 @@ input[type=number]{width:78px}
 .mask .w.bad.peek{color:var(--bad);filter:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 30%,transparent),transparent)}
 .mask .w.bad.open{animation:throb 1.6s ease-in-out infinite}
 @keyframes throb{50%{opacity:.55}}
+/* a mistake once recited correctly: green word, the red glow stays behind it */
+.w.bad:not(.open),
+.mask .w.bad:not(.open):not(.peek){color:color-mix(in srgb,var(--green) 55%,var(--ink));filter:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 40%,transparent),transparent)}
 
 .errors{margin-top:30px;border-top:1px solid var(--edge);padding-top:14px}
 .errors h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:500}
@@ -262,17 +265,34 @@ function align(st, spoken, final){
   while(i<spoken.length && st.pos<words.length){
     const s=spoken[i], j=st.pos, m=st.marks[j], open=!!(m && m.open);
     const done = open ? {s:'bad', said:m.said} : {s:'ok'};
+    // re-reading from an earlier word: follow along silently until back at st.pos
+    if(st.back!=null){
+      if(st.back<j && match(s, words[st.back].n)){ st.back++; i++; continue; }
+      st.back=null;
+    }
     if(match(s, words[j].n)){ st.marks[j]=done; st.pos++; i++; continue; }
     if(j+1<words.length && match(s, words[j].n+words[j+1].n)){
       st.marks[j]=done; st.marks[j+1]={s:'ok'}; st.pos+=2; i++; continue;
     }
-    if(j>0 && match(s, words[j-1].n)){ i++; continue; }      // repeated previous word
+    const k=backTo(st, spoken, i);
+    if(k>=0){ st.back=k+1; i++; continue; }                  // went back to re-read
     // live text may still change: wait for the next word unless this one is clearly wrong
     if(!final && spoken[i+1]===undefined && !clearlyWrong(s, words[j].n)) break;
     st.marks[j]={s:'bad', said:s, open:true};
     st.wrong=(st.wrong||0)+1; i++;
   }
   return spoken.slice(i);
+}
+
+/* Did the reader go back to re-read? Finds the nearest earlier word (within the last
+   60) that spoken[i] matches, confirmed by the next spoken word when there is one,
+   so a wrong word that merely appeared earlier still counts as a mistake. */
+function backTo(st, spoken, i){
+  const s=spoken[i], next=spoken[i+1];
+  for(let k=st.pos-1; k>=Math.max(0, st.pos-60); k--){
+    if(match(s, words[k].n) && (next===undefined || match(next, words[k+1].n))) return k;
+  }
+  return -1;
 }
 
 /* A live (non-matching) word that isn't just the expected word still being heard. */
@@ -330,7 +350,7 @@ function preview(interim){
     if(toks.length && key!==lastDetKey){ lastDetKey=key; detectFeed(toks, false); }
     return;
   }
-  const st={pos:committed.pos, marks:committed.marks.slice(), wrong:committed.wrong||0};
+  const st={pos:committed.pos, marks:committed.marks.slice(), wrong:committed.wrong||0, back:committed.back};
   if(toks.length){
     align(st, stripOpening(pending.concat(toks), st), false);
     buzzFor(st.wrong);
@@ -631,7 +651,7 @@ function reset(){
 }
 
 function jumpTo(i){
-  committed.pos=i; pending=[]; doneShown=false;
+  committed.pos=i; committed.back=null; pending=[]; doneShown=false;
   for(let k=i;k<words.length;k++) committed.marks[k]=undefined;
   render(committed);
 }
@@ -640,7 +660,7 @@ function hint(){
   if(committed.pos>=words.length) return;
   const m=committed.marks[committed.pos];
   committed.marks[committed.pos] = m && m.open ? {s:'bad', said:m.said} : {s:'hint'};
-  committed.pos++; pending=[];
+  committed.pos++; committed.back=null; pending=[];
   render(committed);
 }
 
