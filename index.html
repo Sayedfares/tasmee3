@@ -202,7 +202,7 @@ input[type=number]{width:78px}
 .bk-note{font-size:13px;color:var(--muted)}
 .bk-nav{display:flex;justify-content:space-between;gap:8px}
 @media (max-width:480px){.kpis{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:480px){.pt{font-size:23px}.sura span{font-size:22px;min-width:0}.sura{padding:8px 46px}.basmala{font-size:24px}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
+@media (max-width:480px){.pt{font-size:calc(23px*var(--k,1))}.sura span{font-size:calc(22px*var(--k,1));min-width:0}.sura{padding:8px 46px}.basmala{font-size:calc(24px*var(--k,1))}.wrap{padding-bottom:var(--dockh,190px)}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
 @media (prefers-reduced-motion:reduce){#mushaf>.page.turn-next,#mushaf>.page.turn-prev{animation-duration:1ms}
 .mic.on{animation:none}.w{transition:none}}
 </style>
@@ -1551,11 +1551,11 @@ function setPage(el, animate){
   pageEl=el;
   if(!old || !animate || !old.isConnected){
     pageList().forEach(p=>p.classList.toggle('on', p===el));
-    updatePnav(); return;
+    updatePnav(); fitPage(); return;
   }
   const list=pageList(), fwd=list.indexOf(el)>list.indexOf(old);
   const h0=old.offsetHeight;
-  el.classList.add('on');
+  el.classList.add('on'); fitPage();
   box.style.minHeight=Math.max(h0, el.offsetHeight)+'px';
   const sheet = fwd ? old : el;             // the sheet that moves is always on top
   sheet.classList.add(fwd ? 'turn-next' : 'turn-prev');
@@ -1573,6 +1573,25 @@ function setPage(el, animate){
   setTimeout(end, 800);
   updatePnav();
 }
+
+/* On a phone a mushaf page must show whole, without scrolling down the document: the text scale (--k)
+   is the largest one at which the current page and the page buttons fit between the top bar and the dock. */
+const PHONE=matchMedia('(max-width:480px)');
+function fitPage(){
+  const box=$('#mushaf'), el=pageEl;
+  if(!PHONE.matches || !el || !el.isConnected){ box.style.removeProperty('--k'); document.documentElement.style.removeProperty('--dockh'); return; }
+  const dock=document.querySelector('.dock');
+  document.documentElement.style.setProperty('--dockh', (dock.offsetHeight+8)+'px');
+  const navH=pnav.hidden?0:pnav.offsetHeight+18;
+  const avail=innerHeight-dock.offsetHeight-8-navH-(box.getBoundingClientRect().top+scrollY);
+  let lo=.5, hi=1;
+  box.style.setProperty('--k',1);
+  if(el.offsetHeight<=avail) return;
+  for(let i=0;i<7;i++){ const m=(lo+hi)/2; box.style.setProperty('--k',m); if(el.offsetHeight<=avail) lo=m; else hi=m; }
+  box.style.setProperty('--k',lo);
+}
+addEventListener('resize', ()=>fitPage());
+if(document.fonts) document.fonts.ready.then(()=>fitPage());
 
 function pageOfWord(i){ return words[i] ? elOf(i).closest('#mushaf > .page') : null; }
 
