@@ -75,7 +75,6 @@ input[type=number]{width:78px}
 .w.ok{color:color-mix(in srgb,var(--green) 55%,var(--ink))}
 .w.hint{color:var(--hint)}
 .w.skip{color:var(--skip)}
-.w.bad{color:var(--bad);background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 35%,transparent),transparent)}
 .w.cur{box-shadow:inset 0 -2px 0 var(--green)}
 /* memorization: unread words vanish, leaving only the ruled lines; mistakes become red blurred marks */
 .mask .w:not(.ok):not(.hint):not(.skip):not(.bad){color:transparent}
@@ -123,7 +122,7 @@ input[type=number]{width:78px}
 .tj .t-n{color:#7ea6ff}.tj .t-p{color:#6f7dff}.tj .t-m{color:#5b6cff}.tj .t-o{color:#5f8bff}
 .tj .t-q{color:#ff5a5f}.tj .t-c{color:#f06ce0}.tj .t-f{color:#c56ff0}.tj .t-w{color:#7fd34a}
 .tj .t-i{color:#3fc7ff}.tj .t-a{color:#3fbf9a}.tj .t-u{color:#5fbf45}.tj .t-d,.tj .t-b{color:#a7a7a7}.tj .t-g{color:#ff9a3d}
-.mask .w:not(.ok):not(.hint):not(.skip):not(.shown) [class^="t-"]{color:transparent}
+.mask .w:not(.ok):not(.hint):not(.skip):not(.bad) [class^="t-"]{color:transparent}
 .w.bad [class^="t-"]{color:inherit}
 /* similar verses */
 .sim .w.sm{text-decoration:underline dotted color-mix(in srgb,#b28cff 80%,transparent);text-underline-offset:.35em;text-decoration-thickness:2px}
@@ -166,6 +165,21 @@ input[type=number]{width:78px}
 .mini:hover{border-color:var(--green)}
 .cue{color:var(--ink)!important}
 .muted{color:var(--muted);font-size:14px}
+/* page by page: one mushaf page at a time; turning lifts the page off its right edge (the spine) */
+#mushaf{position:relative;perspective:2200px}
+#mushaf>.page:not(.on){display:none}
+#mushaf>.page{background:var(--bg);transform-origin:right center;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+#mushaf>.page.turn-next,#mushaf>.page.turn-prev{position:absolute;top:0;left:0;right:0;z-index:3;box-shadow:-18px 0 40px rgba(0,0,0,.55)}
+#mushaf>.page.turn-next{animation:turnNext .65s cubic-bezier(.35,.05,.35,1) forwards}
+#mushaf>.page.turn-prev{animation:turnPrev .65s cubic-bezier(.35,.05,.35,1) forwards}
+#mushaf>.page.turn-next::after,#mushaf>.page.turn-prev::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to left,transparent 40%,rgba(0,0,0,.45));animation:inherit;animation-name:turnShade}
+#mushaf>.page.turn-prev::after{animation-direction:reverse}
+@keyframes turnNext{from{transform:rotateY(0)}to{transform:rotateY(96deg)}}
+@keyframes turnPrev{from{transform:rotateY(96deg)}to{transform:rotateY(0)}}
+@keyframes turnShade{from{opacity:0}to{opacity:1}}
+.pnav{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:18px;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.pnav .tb{width:40px;height:40px}
+
 /* word menu (tap a word) and the tafsir / i'rab panel */
 .wscrim{position:fixed;inset:0;z-index:44;background:rgba(0,0,0,.5)}
 .wmenu{position:fixed;inset:auto 0 0 0;z-index:45;background:var(--bar);border-top:1px solid var(--edge);border-radius:18px 18px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.5);
@@ -185,7 +199,8 @@ input[type=number]{width:78px}
 .bk-nav{display:flex;justify-content:space-between;gap:8px}
 @media (max-width:480px){.kpis{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:480px){.pt{font-size:23px}.sura span{font-size:22px;min-width:0}.sura{padding:8px 46px}.basmala{font-size:24px}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
-@media (prefers-reduced-motion:reduce){.mic.on,.mask .w.bad.open{animation:none}.w{transition:none}}
+@media (prefers-reduced-motion:reduce){#mushaf>.page.turn-next,#mushaf>.page.turn-prev{animation-duration:1ms}
+.mic.on{animation:none}.w{transition:none}}
 </style>
 
 <div dir="rtl" lang="ar">
@@ -643,6 +658,7 @@ function render(st){
     w.el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
   }
   updateInfo(st);
+  turnToCursor(cp);
   if(cp!==lastScroll && words[cp]){
     lastScroll=cp;
     const el=elOf(cp), r=el.getBoundingClientRect();
@@ -667,7 +683,7 @@ function updateStats(){
     li.innerHTML=`<span class="q"></span> — آية ${toAr(words[i].ayah)}`;
     li.querySelector('.q').textContent = m.open ? '…' : words[i].text;   // don't give away the word being retried
     if(m.s==='bad') li.title='سُمع: '+m.said;
-    li.onclick=()=>elOf(i).scrollIntoView({behavior:'smooth',block:'center'});
+    li.onclick=()=>revealWord(i);
     $('#errList').appendChild(li);
   });
 }
@@ -769,7 +785,7 @@ function renderSurah(n, f, t){
   $('#surah').value=n; $('#from').value=f; $('#to').value=t;
   $('#from').max=$('#to').max=s.numberOfAyahs;
   const box=$('#mushaf');
-  box.innerHTML=''; words=[]; peek.clear();
+  box.innerHTML=''; words=[]; peek.clear(); pageEl=null; lastCp=-1;   // first page shows without a turn
   // Laid out on the pages of the Madani mushaf: a page always ends at the end of an ayah.
   const frag=document.createDocumentFragment();
   let body=null, pageNo=0;
@@ -845,7 +861,6 @@ function uthmaniWords(n, ai, plainCount){
 const peek=new Set();
 function wordClick(i){
   const m=committed.marks[i];
-  if(mode==='hide' && m && m.s==='bad'){ peek.has(i) ? peek.delete(i) : peek.add(i); render(committed); return; }
   openWordMenu(i);
 }
 
@@ -1398,6 +1413,113 @@ if((!SR && !NSR) || /debug/.test(location.search)){
   $('#debugSend').onclick=send;
   $('#debugText').onkeydown=e=>{ if(e.key==='Enter') send(); };
 }
+/* ---------- Page by page: show one mushaf page, turn it like paper ----------
+   The current page has class "on". Going forward the old page lifts off its right edge
+   (the spine) and reveals the next one under it; going back, the previous page swings
+   down on top. The cursor's page is followed while reciting; swipe or the arrows
+   browse freely without moving the cursor. */
+let pageEl=null, lastCp=-1, turning=null;
+const pageList = () => [...$('#mushaf').querySelectorAll(':scope > .page')];
+
+function setPage(el, animate){
+  if(!el || el===pageEl) return;
+  const old=pageEl, box=$('#mushaf');
+  if(turning) turning();                    // finish a turn still running
+  pageEl=el;
+  if(!old || !animate || !old.isConnected){
+    pageList().forEach(p=>p.classList.toggle('on', p===el));
+    updatePnav(); return;
+  }
+  const list=pageList(), fwd=list.indexOf(el)>list.indexOf(old);
+  const h0=old.offsetHeight;
+  el.classList.add('on');
+  box.style.minHeight=Math.max(h0, el.offsetHeight)+'px';
+  const sheet = fwd ? old : el;             // the sheet that moves is always on top
+  sheet.classList.add(fwd ? 'turn-next' : 'turn-prev');
+  paperSound();
+  const done=()=>{
+    turning=null;
+    sheet.classList.remove('turn-next','turn-prev');
+    old.classList.remove('on');
+    box.style.minHeight='';
+  };
+  turning=done;
+  // end on the animation, or on a timer where animations don't run (hidden tab, reduced motion)
+  const end=()=>{ if(turning===done) done(); };
+  sheet.addEventListener('animationend', function h(e){ if(e.target!==sheet) return; sheet.removeEventListener('animationend', h); end(); });
+  setTimeout(end, 800);
+  updatePnav();
+}
+
+function pageOfWord(i){ return words[i] ? elOf(i).closest('#mushaf > .page') : null; }
+
+/* follow the recitation: when the cursor reaches a word on another page, turn to it */
+function turnToCursor(cp){
+  if(cp===lastCp) return;
+  lastCp=cp;
+  const i=Math.min(cp, words.length-1);
+  if(i>=0) setPage(pageOfWord(i), true);
+}
+
+function turnBy(d){
+  const list=pageList(), k=list.indexOf(pageEl)+d;
+  if(k<0 || k>=list.length) return;
+  setPage(list[k], true);
+  const top=$('#mushaf').getBoundingClientRect().top+scrollY-80;
+  if(scrollY>top) scrollTo({top, behavior:'smooth'});
+}
+
+function revealWord(i){
+  setPage(pageOfWord(i), true);
+  setTimeout(()=>elOf(i).scrollIntoView({behavior:'smooth', block:'center'}), 50);
+}
+
+/* page indicator with previous / next buttons under the page */
+const pnav=document.createElement('nav'); pnav.className='pnav'; pnav.setAttribute('aria-label','الصفحات');
+// right-to-left: the previous page is to the right, the next page to the left
+pnav.innerHTML='<button class="tb" id="pgPrev" aria-label="الصفحة السابقة">›</button><span id="pgInfo"></span><button class="tb" id="pgNext" aria-label="الصفحة التالية">‹</button>';
+$('#mushaf').after(pnav);
+$('#pgNext').onclick=()=>turnBy(1);
+$('#pgPrev').onclick=()=>turnBy(-1);
+function updatePnav(){
+  const list=pageList(), k=list.indexOf(pageEl);
+  pnav.hidden=list.length<2;
+  const no=pageEl && words.find(w=>w.el && pageEl.contains(w.el));
+  $('#pgInfo').textContent = no ? 'صفحة '+toAr(no.page)+' — '+toAr(k+1)+' من '+toAr(list.length) : '';
+  $('#pgNext').disabled=k>=list.length-1; $('#pgPrev').disabled=k<=0;
+}
+
+/* swipe like a printed mushaf: drag to the right for the next page */
+(()=>{
+  let x0=null, y0=0;
+  $('#mushaf').addEventListener('touchstart', e=>{ if(e.touches.length===1){ x0=e.touches[0].clientX; y0=e.touches[0].clientY; } }, {passive:true});
+  $('#mushaf').addEventListener('touchend', e=>{
+    if(x0===null) return;
+    const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
+    if(Math.abs(dx)>60 && Math.abs(dx)>1.5*Math.abs(dy)) turnBy(dx>0 ? 1 : -1);
+  }, {passive:true});
+})();
+document.addEventListener('keydown', e=>{
+  if(e.target.closest && e.target.closest('input,select,textarea')) return;
+  if(document.querySelector('.panel:not([hidden])') || !$('#wMenu').hidden) return;
+  if(e.key==='ArrowLeft') turnBy(1);
+  else if(e.key==='ArrowRight') turnBy(-1);
+});
+
+/* a soft paper rustle: a short burst of filtered noise */
+function paperSound(){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const t0=actx.currentTime, len=0.32, buf=actx.createBuffer(1, Math.floor(actx.sampleRate*len), actx.sampleRate);
+    const ch=buf.getChannelData(0);
+    for(let k=0;k<ch.length;k++) ch[k]=(Math.random()*2-1)*(1-k/ch.length);
+    const src=actx.createBufferSource(), bp=actx.createBiquadFilter(), g=actx.createGain();
+    src.buffer=buf; bp.type='bandpass'; bp.frequency.value=2600; bp.Q.value=0.7;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.06, t0+0.05); g.gain.exponentialRampToValueAtTime(0.0001, t0+len);
+    src.connect(bp).connect(g).connect(actx.destination); src.start(t0);
+  }catch{}
+}
+
 /* ---------- Tafsir & i'rab: tap a word, pick a book, read it for that ayah ----------
    Books come from quranpedia.net, split per surah under books/<key>/<surah>.json as
    {t:[unique texts], a:[text index per ayah]}; i'rab books cover groups of ayahs, so
