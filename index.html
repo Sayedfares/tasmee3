@@ -205,11 +205,16 @@ input[type=number]{width:78px}
 .pnav .tb{width:40px;height:40px}
 
 /* word menu (tap a word) and the tafsir / i'rab panel */
-.wscrim{position:fixed;inset:0;z-index:44;background:rgba(0,0,0,.5)}
+.wscrim{position:fixed;inset:0;z-index:44;background:rgba(0,0,0,.18)}
 .wmenu{position:fixed;inset:auto 0 0 0;z-index:45;background:var(--bar);border-top:1px solid var(--edge);border-radius:18px 18px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.5);
   padding-top:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wmenu{max-height:56vh;overflow-y:auto;overscroll-behavior:contain}
+.wmenu .wsec h3{margin:0 0 4px;font-size:13px;font-weight:500;color:var(--muted)}
+.wmenu .wtext{white-space:pre-line;font-size:16px;line-height:1.9;overflow-wrap:anywhere}
+.wmenu .wtext .q{font-family:var(--quran);font-size:1.15em;color:var(--orn)}
+#mushaf{transition:transform .25s ease}
 .wmenu .in{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
-.wmenu .wq{font-family:var(--quran);font-size:28px;line-height:1.6;text-align:center}
+.wmenu .wq{font-family:var(--quran);font-size:28px;line-height:1.5;text-align:center}
 .wmenu .wq small{display:block;font-family:var(--ui);font-size:13px;color:var(--muted)}
 .wmenu .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .wmenu .acts .btn{min-height:50px}
@@ -340,13 +345,15 @@ input[type=number]{width:78px}
 </section>
 
 <div class="wscrim" id="wScrim" hidden></div>
-<div class="wmenu" id="wMenu" hidden role="dialog" aria-label="خيارات الكلمة">
+<div class="wmenu" id="wMenu" hidden role="dialog" aria-label="إعراب الكلمة وتفسير الآية">
   <div class="in">
     <div class="wq" id="wWord"></div>
+    <section class="wsec"><h3>إعراب الكلمة</h3><div class="wtext" id="wIrabText"></div></section>
+    <section class="wsec"><h3>التفسير الميسر للآية</h3><div class="wtext" id="wTafText"></div></section>
     <div class="acts">
-      <button class="btn primary" id="wTafsir">التفسير</button>
-      <button class="btn" id="wIrab">الإعراب</button>
-      <button class="btn" id="wStart">ابدأ من هنا</button>
+      <button class="btn" id="wIrab">الإعراب كاملًا</button>
+      <button class="btn" id="wTafsir">التفسير كاملًا</button>
+      <button class="btn primary" id="wStart">ابدأ من هنا</button>
     </div>
   </div>
 </div>
@@ -1895,9 +1902,60 @@ function openWordMenu(i){
   }
   const sm=document.createElement('small'); sm.textContent=sName(curSurah)+' — الآية '+toAr(words[i].ayah); box.appendChild(sm);
   $('#wStart').hidden=!!test;               // jumping would silently break a running test
-  $('#wScrim').hidden=false; $('#wMenu').hidden=false; $('#wTafsir').focus();
+  $('#wScrim').hidden=false; $('#wMenu').hidden=false;
+  $('#wMenu').scrollTop=0; fillWordSheet(i); liftWord(i);
 }
-function closeWordMenu(){ $('#wScrim').hidden=true; $('#wMenu').hidden=true; }
+function closeWordMenu(){ $('#wScrim').hidden=true; $('#wMenu').hidden=true; $('#mushaf').style.transform=''; wTok++; }
+
+/* The sheet keeps the mushaf visible above it: if the tapped word would sit under the sheet, the mushaf slides up. */
+function liftWord(i){
+  const m=$('#mushaf'); m.style.transform='';
+  requestAnimationFrame(()=>{
+    if($('#wMenu').hidden || wSel!==i) return;
+    const dy=elOf(i).getBoundingClientRect().bottom-(innerHeight-$('#wMenu').offsetHeight-12);
+    if(dy>0) m.style.transform='translateY(-'+Math.ceil(dy)+'px)';
+  });
+}
+
+/* i'rab (Al-Daas) for one word. The book gives, per ayah (or a group of ayahs), «quoted words» followed by
+   their i'rab. The grammatical entries are lined up with the group's words in order. */
+const GRAM=/محل|مرفوع|منصوب|مجرور|مجزوم|مبني|مبتد|خبر|فاعل|مفعول|جار|صفة|بدل|معطوف|حرف|فعل|ضمير|نافية|عطف|مضاف|جملة|توكيد|حال|تمييز|ظرف|نائب|اسم|متعلق|مقدم|مؤخر|استئناف|الواو|الفاء|اللام|الباء|الهمزة|الميم|الكاف|الهاء/;
+let wTok=0;
+function irabOf(d, s, a, wi){
+  const ix=d.a[a-1]; if(ix==null || ix<0) return null;
+  let ents=[...d.t[ix].matchAll(/«([^»]+)»([^«]*)/g)].map(m=>({q:m[1].trim(), e:m[2].trim().replace(/\s*\n\s*(سورة|\[).*$/s,''), qt:tokenize(m[1])})).filter(x=>x.e && GRAM.test(x.e));
+  // a lexical pass over the same words may come first: use the second pass when the first quote repeats
+  if(ents.length>3){ const again=ents.findIndex((x,k)=>k>0 && x.qt[0]===ents[0].qt[0]); if(again>0 && again<ents.length*0.6) ents=ents.slice(again); }
+  const group=[]; d.a.forEach((v,k)=>{ if(v===ix) group.push(k+1); });
+  const toks=[]; group.forEach(g=>ayahTokens(s, g, surahs[s-1].ayahs[g-1]).forEach((tx,j)=>toks.push({a:g, j, n:norm(tx)})));
+  let e=0, found=null;
+  for(const t of toks){
+    let f=-1;
+    for(let k=e; k<Math.min(ents.length, e+5); k++) if(ents[k].qt.some(q=>q===t.n || match(q, t.n))){ f=k; break; }
+    if(f>=0){ e=f; if(t.a===a && t.j===wi){ found=ents[f]; break; } }
+  }
+  return found;
+}
+function fillWordSheet(i){
+  const w=words[i], s=curSurah, a=w.ayah, tok=++wTok;
+  const irab=$('#wIrabText'), taf=$('#wTafText');
+  irab.textContent=taf.textContent='جارِ التحميل…';
+  const fail=el=>{ if(tok===wTok){ el.textContent='تعذّر تحميل الكتاب — تأكد من الاتصال وحاول تاني.'; liftWord(i); } };
+  bookFile('irab-daas', s).then(d=>{
+    if(tok!==wTok) return;
+    const e=irabOf(d, s, a, w.wi);
+    irab.textContent='';
+    if(e){ const q=document.createElement('span'); q.className='q'; q.textContent='«'+e.q+'» '; irab.append(q, e.e); }
+    else irab.textContent='ما لقيتش إعراب لهذه الكلمة تحديدًا — اضغط «الإعراب كاملًا» لتشوف إعراب الآية.';
+    liftWord(i);
+  }).catch(()=>fail(irab));
+  bookFile('tafsir', s).then(d=>{
+    if(tok!==wTok) return;
+    const ix=d.a[a-1];
+    taf.textContent=(ix>=0 && d.t[ix]) || 'لا يوجد تفسير لهذه الآية في الكتاب.';
+    liftWord(i);
+  }).catch(()=>fail(taf));
+}
 
 async function showBook(key, s, a){
   bk={key, s, a};
