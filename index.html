@@ -72,7 +72,8 @@ input[type=number]{width:78px}
 .empty{color:var(--muted);text-align:center;padding:70px 10px;line-height:1.9}
 
 .w{padding:0 2px;border-radius:10px;cursor:pointer;transition:color .2s,background .2s,filter .2s;user-select:none;-webkit-user-select:none}
-.w.ok{color:color-mix(in srgb,var(--green) 55%,var(--ink))}
+.w.ok{color:var(--green)}
+.w.ok [class^="t-"]{color:inherit}           /* a recited word turns fully green, tajweed colors included */
 .w.hint{color:var(--hint)}
 .w.skip{color:var(--skip)}
 .w.cur{box-shadow:inset 0 -2px 0 var(--green)}
@@ -81,11 +82,10 @@ input[type=number]{width:78px}
 .mask .w.skip{color:transparent;background:radial-gradient(closest-side,color-mix(in srgb,var(--skip) 80%,transparent),transparent);filter:blur(5px)}
 @keyframes throb{50%{opacity:.55}}
 /* a mistake: marked once, reading moves on; the word stays visible (both modes) with the red glow around it */
-/* a mistake: the word itself stays fully readable (bright letters with a dark outline);
-   the red is a light wash plus a glow around it, never a solid patch over the letters */
-.w.bad,.mask .w.bad{color:#fff;filter:none;
-  background:radial-gradient(closest-side,color-mix(in srgb,var(--bad) 28%,transparent),transparent);
-  text-shadow:0 0 2px #000,0 0 1px #000,0 0 12px color-mix(in srgb,var(--bad) 85%,transparent),0 0 22px color-mix(in srgb,var(--bad) 55%,transparent)}
+/* a mistake: rose letters, fully readable, over a large soft olive glow that spills past the word */
+.w.bad,.mask .w.bad{color:#e2737c;filter:none;background:none;position:relative;isolation:isolate}
+.w.bad::before{content:"";position:absolute;left:50%;top:50%;width:max(2.4em,130%);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;z-index:-1;pointer-events:none;
+  background:radial-gradient(circle,rgba(176,168,48,.55) 0%,rgba(150,145,40,.32) 38%,rgba(120,118,30,.12) 58%,transparent 72%)}
 
 .errors{margin-top:30px;border-top:1px solid var(--edge);padding-top:14px}
 .errors h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:500}
