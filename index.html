@@ -122,6 +122,55 @@ input[type=number]{width:78px}
 .tb:hover{border-color:var(--green)}
 .tb:disabled{opacity:.4;cursor:default}
 .tb[aria-pressed=true]{background:var(--green-deep);border-color:var(--green-deep);color:#fff}
+/* tajweed colors (tuned for the dark page) */
+.tj .t-h,.tj .t-s,.tj .t-l{color:#8d918f}
+.tj .t-n{color:#7ea6ff}.tj .t-p{color:#6f7dff}.tj .t-m{color:#5b6cff}.tj .t-o{color:#5f8bff}
+.tj .t-q{color:#ff5a5f}.tj .t-c{color:#f06ce0}.tj .t-f{color:#c56ff0}.tj .t-w{color:#7fd34a}
+.tj .t-i{color:#3fc7ff}.tj .t-a{color:#3fbf9a}.tj .t-u{color:#5fbf45}.tj .t-d,.tj .t-b{color:#a7a7a7}.tj .t-g{color:#ff9a3d}
+.mask .w:not(.ok):not(.hint):not(.skip) [class^="t-"]{color:transparent}
+.w.bad [class^="t-"]{color:inherit}
+/* similar verses */
+.sim .w.sm{text-decoration:underline dotted color-mix(in srgb,#b28cff 80%,transparent);text-underline-offset:.35em;text-decoration-thickness:2px}
+.sim .an.sm{border-color:#b28cff;color:#cdb6ff;cursor:pointer}
+.mask .w.sm:not(.ok){text-decoration-color:transparent}
+.tjlegend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px}
+.tjlegend span{font-family:var(--quran);font-size:17px}
+.sec{border-top:1px solid var(--edge);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.sec h3{margin:0;font-size:14px;color:var(--muted);font-weight:500}
+.toggles{display:flex;flex-wrap:wrap;gap:4px 18px}
+
+/* full-screen panels (stats, similar verses, test results) */
+.panel{position:fixed;inset:0;z-index:40;background:var(--bg);overflow-y:auto;padding-top:env(safe-area-inset-top,0px)}
+.panel .ph{position:sticky;top:0;z-index:1;background:var(--bar);border-bottom:1px solid var(--edge);display:flex;align-items:center;gap:10px;padding:10px max(12px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px))}
+.panel .ph h2{flex:1;margin:0;font-size:18px}
+.panel .pb{max-width:760px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--edge);border-radius:14px;padding:14px}
+.card h3{margin:0 0 10px;font-size:15px;font-weight:500;color:var(--muted)}
+.streak{display:flex;align-items:center;gap:14px}
+.streak b{font-size:44px;line-height:1;color:var(--hint);font-variant-numeric:tabular-nums}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.kpi{background:var(--surface2);border-radius:10px;padding:10px;text-align:center}
+.kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.goal{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.goal .gl{flex:1;min-width:0}
+.goal .gt{display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px;font-variant-numeric:tabular-nums}
+.bar2{height:8px;border-radius:5px;background:var(--surface2);overflow:hidden}
+.bar2 i{display:block;height:100%;background:var(--green);border-radius:5px}
+.goalform{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,1fr);gap:3px;overflow-x:auto;padding-bottom:4px;direction:ltr}
+.heat i{width:13px;height:13px;border-radius:3px;background:var(--surface2)}
+.heat i.l1{background:#1f5a3a}.heat i.l2{background:#2a8a55}.heat i.l3{background:#3fbf76}.heat i.l4{background:#6fe7a3}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.list li{display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:10px;padding:8px 12px;font-size:14px}
+.list li .q{font-family:var(--quran);font-size:20px}
+.list li .grow{flex:1;min-width:0}
+.list li small{color:var(--muted);display:block}
+.mini{border:1px solid var(--edge);background:var(--surface);color:var(--ink);border-radius:999px;min-width:36px;height:36px;padding:0 10px;cursor:pointer;display:inline-grid;place-items:center;flex:none}
+.mini:hover{border-color:var(--green)}
+.cue{color:var(--ink)!important}
+.muted{color:var(--muted);font-size:14px}
+@media (max-width:480px){.kpis{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:480px){.pt{font-size:23px}.sura span{font-size:22px;min-width:0}.sura{padding:8px 46px}.basmala{font-size:24px}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
 @media (prefers-reduced-motion:reduce){.mic.on,.mask .w.bad.open{animation:none}.w{transition:none}}
 </style>
@@ -139,6 +188,9 @@ input[type=number]{width:78px}
     <button class="ib" id="autoBtn" aria-label="اكتشاف تلقائي للسورة" title="اكتشاف تلقائي" disabled>
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     </button>
+    <button class="ib" id="statsBtn" aria-label="الإحصائيات والأهداف وسجل الأخطاء" title="الإحصائيات">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+    </button>
   </div>
 </header>
 
@@ -149,7 +201,27 @@ input[type=number]{width:78px}
     <label class="field">إلى آية<input id="to" type="number" min="1" value="7"></label>
     <button class="btn primary" id="load">افتح السورة</button>
   </div>
-  <label class="chk"><input id="beep" type="checkbox" checked> تنبيه صوتي عند الخطأ</label>
+  <div class="toggles">
+    <label class="chk"><input id="beep" type="checkbox" checked> تنبيه صوتي عند الخطأ</label>
+    <label class="chk"><input id="tjOn" type="checkbox" checked> ألوان التجويد</label>
+    <label class="chk"><input id="simOn" type="checkbox"> إظهار المتشابهات</label>
+    <label class="chk"><input id="recOn" type="checkbox" checked> سجّل صوتي عند الخطأ</label>
+  </div>
+  <div class="tjlegend" id="tjLegend">
+    <span style="color:#ff9a3d">غنة</span><span style="color:#ff5a5f">قلقلة</span><span style="color:#c56ff0">إخفاء</span>
+    <span style="color:#3fc7ff">إقلاب</span><span style="color:#3fbf9a">إدغام بغنة</span><span style="color:#5fbf45">إدغام بلا غنة</span>
+    <span style="color:#7ea6ff">مد طبيعي</span><span style="color:#5f8bff">مد واجب/جائز</span><span style="color:#5b6cff">مد لازم</span><span style="color:#8d918f">لا يُنطق</span>
+  </div>
+  <div class="sec">
+    <h3>اختبار عشوائي من حفظك</h3>
+    <div class="controls">
+      <label class="field">من جزء<input id="tFrom" type="number" min="1" max="30" value="30"></label>
+      <label class="field">إلى جزء<input id="tTo" type="number" min="1" max="30" value="30"></label>
+      <label class="field">عدد الأسئلة<input id="tCount" type="number" min="1" max="50" value="5"></label>
+      <label class="field">طول السؤال<select id="tLen" style="min-width:110px"><option value="1">آية</option><option value="2" selected>آيتين</option><option value="3">٣ آيات</option></select></label>
+      <button class="btn primary" id="testBtn">ابدأ الاختبار</button>
+    </div>
+  </div>
   <div class="legend">
     <span><i style="background:var(--bad)"></i>خطأ — أعد الكلمة لتكمل (اضغط العلامة لترى الكلمة)</span>
     <span><i style="background:var(--hint)"></i>تلميح</span>
@@ -160,7 +232,7 @@ input[type=number]{width:78px}
     <input id="debugText" type="text" placeholder="اكتب ما قرأته هنا (للتجربة بدون مايك)">
     <button class="btn" id="debugSend">إرسال</button>
   </div>
-  <div class="credit">نص القرآن الكريم من مشروع تنزيل — tanzil.net</div>
+  <div class="credit">نص القرآن الكريم ونص التجويد من مشروع تنزيل (tanzil.net) وموقع alquran.cloud</div>
 </div>
 
 <main class="wrap">
@@ -169,6 +241,36 @@ input[type=number]{width:78px}
 </main>
 
 <div id="msg" role="status" aria-live="polite"></div>
+
+<section class="panel" id="statsPanel" hidden aria-label="الإحصائيات">
+  <div class="ph"><h2>تقدّمك</h2><button class="ib" data-close aria-label="إغلاق">✕</button></div>
+  <div class="pb">
+    <div class="card streak"><b id="stStreak">٠</b><div><div>أيام متتالية</div><div class="muted" id="stStreakNote"></div></div></div>
+    <div class="card"><h3>النهارده</h3><div class="kpis" id="stToday"></div></div>
+    <div class="card"><h3>أهدافك اليومية</h3>
+      <div id="stGoals"></div>
+      <div class="goalform">
+        <label class="field">الهدف<select id="gType" style="min-width:130px"><option value="ayahs">آيات</option><option value="words">كلمات</option><option value="minutes">دقائق تسميع</option><option value="pages">صفحات</option></select></label>
+        <label class="field">كل يوم<input id="gTarget" type="number" min="1" value="10"></label>
+        <button class="btn primary" id="gAdd">أضف هدف</button>
+      </div>
+    </div>
+    <div class="card"><h3>آخر ١٦ أسبوع (عدد الآيات)</h3><div class="heat" id="stHeat"></div></div>
+    <div class="card"><h3>سور تحتاج مراجعة</h3><ul class="list" id="stWeak"></ul></div>
+    <div class="card"><h3>سور متقنة</h3><ul class="list" id="stStrong"></ul></div>
+    <div class="card"><h3>سجل الأخطاء</h3><ul class="list" id="stLog"></ul></div>
+  </div>
+</section>
+
+<section class="panel" id="simPanel" hidden aria-label="الآيات المتشابهة">
+  <div class="ph"><h2 id="simTitle">آيات متشابهة</h2><button class="ib" data-close aria-label="إغلاق">✕</button></div>
+  <div class="pb"><ul class="list" id="simList"></ul></div>
+</section>
+
+<section class="panel" id="testPanel" hidden aria-label="نتيجة الاختبار">
+  <div class="ph"><h2>نتيجة الاختبار</h2><button class="ib" data-close aria-label="إغلاق">✕</button></div>
+  <div class="pb"><div class="card streak"><b id="tScore"></b><div id="tScoreNote"></div></div><ul class="list" id="tList"></ul></div>
+</section>
 
 <footer class="dock">
   <div class="in">
@@ -235,7 +337,7 @@ function match(s,e){
   if(s===e) return true;
   const min=Math.min(s.length,e.length), max=Math.max(s.length,e.length);
   if(min<=2) return false;                       // short words must be exact
-  const need = min<=4 ? 0.75 : 0.7;
+  const need = min<=5 ? 0.75 : 0.7;              // ≤5: one letter off at most (السموات ≠ السماء)
   if(1-(max-min)/max < need) return false;       // lengths too different
   const key=s+'|'+e;
   let r=matchMemo.get(key);
@@ -265,17 +367,26 @@ function align(st, spoken, final){
   while(i<spoken.length && st.pos<words.length){
     const s=spoken[i], j=st.pos, m=st.marks[j], open=!!(m && m.open);
     const done = open ? {s:'bad', said:m.said} : {s:'ok'};
-    // re-reading from an earlier word: follow along silently until back at st.pos
+    // re-reading from an earlier word: follow along silently until back at st.pos.
+    // While re-reading nothing counts as a mistake: a word the recognizer garbled is
+    // skipped, and up to 3 unclear words in a row are tolerated before tracking resumes.
     if(st.back!=null){
-      if(st.back<j && match(s, words[st.back].n)){ st.back++; i++; continue; }
-      st.back=null;
+      const b=st.back;
+      if(b<j && match(s, words[b].n)){ st.back++; st.miss=0; i++; continue; }
+      if(b+1<j && match(s, words[b+1].n)){ st.back+=2; st.miss=0; i++; continue; }   // a word was not heard
+      if(b<j && !match(s, words[j].n)){
+        const k=backTo(st, spoken, i);
+        if(k>=0){ st.back=k+1; st.miss=0; i++; continue; }      // started over again
+        if((st.miss=(st.miss||0)+1)<=3){ i++; continue; }        // unclear word while re-reading
+      }
+      st.back=null; st.miss=0;                                   // caught up: normal tracking
     }
     if(match(s, words[j].n)){ st.marks[j]=done; st.pos++; i++; continue; }
     if(j+1<words.length && match(s, words[j].n+words[j+1].n)){
       st.marks[j]=done; st.marks[j+1]={s:'ok'}; st.pos+=2; i++; continue;
     }
     const k=backTo(st, spoken, i);
-    if(k>=0){ st.back=k+1; i++; continue; }                  // went back to re-read
+    if(k>=0){ st.back=k+1; st.miss=0; i++; continue; }       // went back to re-read
     // live text may still change: wait for the next word unless this one is clearly wrong
     if(!final && spoken[i+1]===undefined && !clearlyWrong(s, words[j].n)) break;
     st.marks[j]={s:'bad', said:s, open:true};
@@ -331,6 +442,7 @@ function commitTokens(toks){
   const pos0=committed.pos;
   pending = align(committed, stripOpening(pending.concat(toks), committed), true);
   buzzFor(committed.wrong||0);
+  trackProgress(pos0);
   // lost track? the reader may have moved to another place
   if(!autoMode) return;
   lostBuf = committed.pos===pos0 ? lostBuf.concat(toks).slice(-12) : [];
@@ -350,7 +462,7 @@ function preview(interim){
     if(toks.length && key!==lastDetKey){ lastDetKey=key; detectFeed(toks, false); }
     return;
   }
-  const st={pos:committed.pos, marks:committed.marks.slice(), wrong:committed.wrong||0, back:committed.back};
+  const st={pos:committed.pos, marks:committed.marks.slice(), wrong:committed.wrong||0, back:committed.back, miss:committed.miss};
   if(toks.length){
     align(st, stripOpening(pending.concat(toks), st), false);
     buzzFor(st.wrong);
@@ -430,7 +542,7 @@ function detectFeed(toks, isFinal){
 }
 
 function startDetect(){
-  detecting=true; autoMode=true; detBuf=[]; lostBuf=[]; pending=[]; dropNext=0;
+  detecting=true; autoMode=true; test=null; detBuf=[]; lostBuf=[]; pending=[]; dropNext=0;
   words=[]; committed={pos:0, marks:[]}; curSurah=0;
   $('#mushaf').innerHTML='<div class="empty">اقرأ من أي مكان في القرآن…<br>هيتعرّف على السورة والآية تلقائيًا</div>';
   showMsg(''); updateStats(); updateInfo(committed);
@@ -449,16 +561,24 @@ function lockOn(i, q){
 /* ---------- Rendering ---------- */
 function render(st){
   for(let i=0;i<words.length;i++){
-    const m=st.marks[i], el=words[i].el;
-    let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(m&&m.s==='bad'&&peek.has(i)?' peek':'')+(i===st.pos?' cur':'');
-    if(el.className!==c) el.className=c;
-    el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
+    const w=words[i]; if(!w.el) continue;              // part of a merged Uthmani word
+    // a merged word shows its worst part: an open mistake, then a mistake, then hint, then ok
+    let m=st.marks[i], cur=i===st.pos;
+    for(let t=1;t<w.k;t++){
+      const p=st.marks[i+t]; if(i+t===st.pos) cur=true;
+      if(!p){ if(m && !(m.s==='bad')) m=undefined; continue; }
+      if(p.s==='bad' && (!m || m.s!=='bad' || p.open)) m=p;
+      else if(p.s==='hint' && m && m.s==='ok') m=p;
+    }
+    let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(m&&m.s==='bad'&&peek.has(i)?' peek':'')+(cur?' cur':'')+(simWord(i)?' sm':'');
+    if(w.el.className!==c) w.el.className=c;
+    w.el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
   }
   updateInfo(st);
   if(st.pos!==lastScroll && words[st.pos]){
     lastScroll=st.pos;
-    const r=words[st.pos].el.getBoundingClientRect();
-    if(r.top<80 || r.bottom>innerHeight-120) words[st.pos].el.scrollIntoView({behavior:'smooth',block:'center'});
+    const el=elOf(st.pos), r=el.getBoundingClientRect();
+    if(r.top<80 || r.bottom>innerHeight-120) el.scrollIntoView({behavior:'smooth',block:'center'});
   }
   updateStats();
   if(st===committed || st.pos>=words.length) checkDone(st);
@@ -479,7 +599,7 @@ function updateStats(){
     li.innerHTML=`<span class="q"></span> — آية ${toAr(words[i].ayah)}`;
     li.querySelector('.q').textContent = m.open ? '…' : words[i].text;   // don't give away the word being retried
     if(m.s==='bad') li.title='سُمع: '+m.said;
-    li.onclick=()=>words[i].el.scrollIntoView({behavior:'smooth',block:'center'});
+    li.onclick=()=>elOf(i).scrollIntoView({behavior:'smooth',block:'center'});
     $('#errList').appendChild(li);
   });
 }
@@ -488,6 +608,7 @@ let doneShown=false;
 function checkDone(st){
   if(!words.length || st.pos<words.length || doneShown || st!==committed) return;
   doneShown=true;
+  if(test){ questionDone(); return; }
   const errs=countErrors(committed), total=words.length;
   const text = errs ? `انتهيت ✔ — ${toAr(errs)} خطأ من ${toAr(total)} كلمة. راجع المواضع الملوّنة.` : `ما شاء الله! ${toAr(total)} كلمة بدون أخطاء.`;
   if(autoMode && listening){
@@ -537,9 +658,10 @@ function alertError(){
 /* ---------- Loading Quran text (bundled quran.json) ---------- */
 async function init(){
   try{
-    const r=await fetch('quran.json');
+    const [r, ru]=await Promise.all([fetch('quran.json'), fetch('uthmani.json').catch(()=>null)]);
     if(!r.ok) throw new Error(r.status);
     surahs=(await r.json()).map(s=>({...s, numberOfAyahs:s.ayahs.length}));
+    try{ if(ru && ru.ok) uthmani=await ru.json(); }catch{ uthmani=null; }
     const sel=$('#surah'); sel.innerHTML='';
     surahs.forEach(s=>{
       const o=document.createElement('option');
@@ -565,7 +687,7 @@ function onSurahChange(){
 
 function loadSelection(){
   stopListening();
-  autoMode=false; detecting=false; dropNext=0;
+  autoMode=false; detecting=false; test=null; dropNext=0;
   const n=+$('#surah').value, s=surahs[n-1]; if(!s) return;
   let f=Math.max(1, +$('#from').value||1), t=Math.min(s.numberOfAyahs, +$('#to').value||s.numberOfAyahs);
   if(t<f) t=f;
@@ -600,21 +722,55 @@ function renderSurah(n, f, t){
       body=document.createElement('div'); body.className='pt'; pg.appendChild(body);
       frag.appendChild(pg);
     }
-    ayahTokens(n, an, s.ayahs[ai]).forEach(tx=>{
+    // Matching runs on the plain words; the page shows Uthmani words with tajweed.
+    // One Uthmani word can stand for several plain words (يَـٰٓأَيُّهَا = يا أيها):
+    // the first plain word owns the visible span, the others point at it.
+    const plain=ayahTokens(n, an, s.ayahs[ai]);
+    const disp=uthmaniWords(n, ai, plain.length);
+    let pi=0;
+    disp.forEach(dw=>{
       const el=document.createElement('span');
-      el.className='w'; el.textContent=tx;
-      const idx=words.length;
-      el.onclick=()=>wordClick(idx);
-      words.push({text:tx, n:norm(tx), ayah:an, page:pageNo, juz:s.juz[ai], el});
+      el.className='w';
+      if(dw.html) el.innerHTML=dw.html; else el.textContent=plain[pi];
+      const lead=words.length;
+      el.onclick=()=>wordClick(lead);
+      for(let t=0; t<dw.k; t++, pi++){
+        const tx=plain[pi];
+        words.push({text:dw.text||tx, n:norm(tx), ayah:an, wi:pi, page:pageNo, juz:s.juz[ai], el: t?null:el, lead, k:t?0:dw.k});
+      }
       body.append(el, ' ');
     });
     const mk=document.createElement('span'); mk.className='an'; mk.textContent=toAr(an);
     mk.setAttribute('aria-label','آية '+toAr(an));
+    mk.dataset.s=n; mk.dataset.a=an;
+    mk.onclick=()=>openSimilar(n, an);
     body.append(mk, ' ');
   }
   box.appendChild(frag);
+  logged.clear();
   reset();
+  applySim();
   ['#mic','#hintBtn','#ayahBtn','#resetBtn'].forEach(id=>$(id).disabled=false);
+}
+
+const elOf = i => words[words[i].lead].el;
+
+/* Uthmani display words for one ayah: [{html, text, k}], k = plain words it covers.
+   Falls back to the plain words (no tajweed) if the data is missing or doesn't line up. */
+let uthmani=null;
+const TJ=/\{([a-z]):([^}]*)\}/g;
+function esc(t){ return t.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function uthmaniWords(n, ai, plainCount){
+  const raw=uthmani && uthmani[n-1] && uthmani[n-1][ai];
+  if(raw){
+    const out=raw.split(' ').map(w=>{
+      let k=1; const m=w.match(/^(\d+)~/); if(m){ k=+m[1]; w=w.slice(m[0].length); }
+      const html=esc(w).replace(TJ,(_,r,t)=>`<span class="t-${r}">${t}</span>`);
+      return {html, text:w.replace(TJ,'$2'), k};
+    });
+    if(out.reduce((a,d)=>a+d.k,0)===plainCount) return out;
+  }
+  return Array.from({length:plainCount}, ()=>({html:null, text:null, k:1}));
 }
 
 /* In memorization mode a mistake is a red blurred mark; tapping it shows the word. */
@@ -641,7 +797,7 @@ function updateInfo(st){
   if(!words.length){ $('#infoSurah').textContent='فارس'; $('#infoMeta').textContent=detecting?'جارِ الاستماع… اقرأ من أي مكان':'اقرأ وهو يتابعك'; return; }
   const w=words[Math.min(st.pos, words.length-1)];
   $('#infoSurah').textContent=surahs[curSurah-1].name;
-  $('#infoMeta').textContent=`صفحة ${toAr(w.page)} | جزء ${toAr(w.juz)} | آية ${toAr(w.ayah)}`;
+  $('#infoMeta').textContent=(test?`اختبار ${toAr(test.i+1)} من ${toAr(test.qs.length)} | `:'')+`صفحة ${toAr(w.page)} | جزء ${toAr(w.juz)} | آية ${toAr(w.ayah)}`;
 }
 
 function reset(){
@@ -651,7 +807,7 @@ function reset(){
 }
 
 function jumpTo(i){
-  committed.pos=i; committed.back=null; pending=[]; doneShown=false;
+  committed.pos=i; committed.back=null; committed.miss=0; pending=[]; doneShown=false;
   for(let k=i;k<words.length;k++) committed.marks[k]=undefined;
   render(committed);
 }
@@ -660,7 +816,7 @@ function hint(){
   if(committed.pos>=words.length) return;
   const m=committed.marks[committed.pos];
   committed.marks[committed.pos] = m && m.open ? {s:'bad', said:m.said} : {s:'hint'};
-  committed.pos++; committed.back=null; pending=[];
+  committed.pos++; committed.back=null; committed.miss=0; pending=[];
   render(committed);
 }
 
@@ -692,6 +848,12 @@ function startRec(){
     if(shown) $('#heard').textContent='🎧 '+shown;
   };
   rec.onerror=e=>{
+    if(e.error==='audio-capture' && Rec.on){
+      // the voice-clip recorder is holding the mic: drop it, recognition restarts via onend
+      recStop(); $('#recOn').checked=false; applyOpts();
+      showMsg('وقفت تسجيل صوتك عشان المايك ما يتعطلش عن متابعة القراءة. تقدر ترجّعه من القائمة ☰.', true);
+      return;
+    }
     if(e.error==='not-allowed' || e.error==='service-not-allowed'){
       listening=false; updateMic();
       showMsg('لم يُسمح باستخدام المايك. اسمح بالوصول للمايك من إعدادات المتصفح.', true);
@@ -802,19 +964,349 @@ function showRecTime(){
 }
 function updateRecTimer(){
   if(listening && !recSince){ recSince=Date.now(); recTick=setInterval(showRecTime, 1000); }
-  if(!listening && recSince){ recMs+=Date.now()-recSince; recSince=0; clearInterval(recTick); }
+  if(!listening && recSince){ const d=Date.now()-recSince; recMs+=d; addListenTime(d); recSince=0; clearInterval(recTick); }
   if(listening) $('#recChip').hidden=false;
   $('#recChip').classList.toggle('live', listening);
   showRecTime();
 }
 function updateMic(){
   updateRecTimer();
+  if(listening && !Rec.on) recStart();
+  if(!listening && Rec.on) recStop();
   $('#mic').classList.toggle('on', listening);
   $('#mic').setAttribute('aria-label', listening?'إيقاف':'ابدأ التسميع');
   if(listening && !$('#heard').textContent.startsWith('🎧')) $('#heard').textContent='🎧 أسمعك…';
   if(!listening && $('#heard').textContent.startsWith('🎧')) $('#heard').textContent='متوقف — اضغط المايك للمتابعة';
   updateInfo(committed);
 }
+
+/* ---------- Progress: daily stats, goals, streak, mistake log ----------
+   Kept on this device (localStorage); voice clips in IndexedDB. */
+const ST_KEY='faris_stats';
+let S=store.get(ST_KEY) || {days:{}, surahs:{}, goals:[{type:'ayahs', target:10}], log:[]};
+const dkey = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today = () => dkey(new Date());
+function day(k){ k=k||today(); return S.days[k] || (S.days[k]={words:0, ayahs:0, pages:0, ms:0, mistakes:0}); }
+let saveT=null;
+function saveStats(){ clearTimeout(saveT); saveT=setTimeout(()=>store.set(ST_KEY,S), 300); }
+addEventListener('pagehide', ()=>store.set(ST_KEY,S));
+
+const GOAL_NAMES={ayahs:'آيات', words:'كلمات', minutes:'دقائق تسميع', pages:'صفحات'};
+function goalValue(type, d){
+  d=d||day();
+  if(type==='minutes') return Math.floor((d.ms + (recSince && d===day() ? Date.now()-recSince : 0))/60000);
+  return d[type]||0;
+}
+function goalsMet(){ return S.goals.filter(g=>goalValue(g.type)>=g.target).length; }
+
+/* Called after recited words are committed: count what was just passed, log new mistakes. */
+const logged=new Set();
+function trackProgress(pos0){
+  if(!words.length) return;
+  const d=day(), sv=S.surahs[curSurah] || (S.surahs[curSurah]={words:0, mistakes:0});
+  const metBefore=goalsMet();
+  for(let i=pos0; i<committed.pos; i++){
+    const m=committed.marks[i];
+    if(!m || m.s==='hint') continue;
+    d.words++; sv.words++;
+    const last = i+1>=words.length || words[i+1].ayah!==words[i].ayah;
+    if(last) d.ayahs++;
+    if(i+1<words.length && words[i+1].page!==words[i].page) d.pages++;
+  }
+  for(let i=pos0; i<=Math.min(committed.pos, words.length-1); i++){
+    const m=committed.marks[i];
+    if(m && m.s==='bad' && !logged.has(i)){ logged.add(i); logMistake(i, m.said); d.mistakes++; sv.mistakes++; }
+  }
+  if(goalsMet()>metBefore) showMsg('أحسنت! حقّقت هدف من أهداف النهارده 🎉');
+  saveStats();
+}
+function addListenTime(ms){ day().ms+=ms; saveStats(); }
+
+function logMistake(i, said){
+  const w=words[words[i].lead];
+  const e={t:Date.now(), s:curSurah, a:w.ayah, wi:w.wi, w:w.text, said:said||''};
+  if(Rec.on){ e.clip='c'+e.t+'_'+i; Rec.want.push(e.clip); }
+  S.log.push(e);
+  if(S.log.length>400){ S.log.splice(0, S.log.length-400).forEach(x=>x.clip && idb.del(x.clip)); }
+  // keep at most 60 voice clips
+  const withClip=S.log.filter(x=>x.clip);
+  withClip.slice(0, Math.max(0, withClip.length-60)).forEach(x=>{ idb.del(x.clip); delete x.clip; });
+}
+
+function streak(){
+  let n=0; const d=new Date();
+  if(!(S.days[dkey(d)]||{}).words) d.setDate(d.getDate()-1);   // today not started yet: count up to yesterday
+  while((S.days[dkey(d)]||{}).words){ n++; d.setDate(d.getDate()-1); }
+  return n;
+}
+
+/* ---------- Voice clips of mistakes ----------
+   The mic is recorded in 4-second pieces while listening; a mistake keeps the
+   piece before it and the piece it happened in. Not available inside the
+   Android app (its recognizer holds the mic) or on claude.ai (no mic access). */
+const idb={
+  db:null,
+  open(){ return this.db || (this.db=new Promise((res,rej)=>{ const r=indexedDB.open('faris',1); r.onupgradeneeded=()=>r.result.createObjectStore('clips'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); })); },
+  async run(mode, fn){ const db=await this.open(); return new Promise((res,rej)=>{ const tx=db.transaction('clips',mode); const r=fn(tx.objectStore('clips')); tx.oncomplete=()=>res(r && r.result); tx.onerror=()=>rej(tx.error); }); },
+  put(k,v){ return this.run('readwrite', s=>s.put(v,k)).catch(()=>{}); },
+  get(k){ return this.run('readonly', s=>s.get(k)).catch(()=>null); },
+  del(k){ return this.run('readwrite', s=>s.delete(k)).catch(()=>{}); }
+};
+const Rec={on:false, stream:null, mr:null, prev:null, want:[]};
+async function recStart(){
+  if(!$('#recOn').checked || NSR || window.claude || !window.MediaRecorder || !navigator.mediaDevices) return;
+  Rec.on=true;
+  try{ Rec.stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+  catch{ Rec.on=false; return; }
+  if(!listening){ recStop(); return; }
+  recPiece();
+}
+function recPiece(){
+  if(!Rec.on || !Rec.stream) return;
+  const mr=new MediaRecorder(Rec.stream), chunks=[];
+  mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  mr.onstop=()=>{
+    const blob=new Blob(chunks, {type:mr.mimeType||'audio/webm'}), prev=Rec.prev;
+    Rec.prev=blob;
+    const waiting=Rec.want; Rec.want=[];
+    waiting.forEach(id=>idb.put(id, [prev, blob].filter(Boolean)));
+    recPiece();
+  };
+  mr.start(); Rec.mr=mr;
+  setTimeout(()=>{ if(mr.state!=='inactive') mr.stop(); }, 4000);
+}
+function recStop(){
+  Rec.on=false;
+  if(Rec.mr && Rec.mr.state!=='inactive') Rec.mr.stop();
+  if(Rec.stream){ Rec.stream.getTracks().forEach(t=>t.stop()); Rec.stream=null; }
+  Rec.prev=null;
+}
+let player=null;
+async function playClip(id){
+  const blobs=await idb.get(id);
+  if(!blobs || !blobs.length){ showMsg('التسجيل ده مش موجود على الجهاز.', true); return; }
+  if(player){ player.pause(); }
+  let k=0; player=new Audio();
+  const next=()=>{ if(k>=blobs.length) return; player.src=URL.createObjectURL(blobs[k++]); player.play().catch(()=>{}); };
+  player.onended=next; next();
+}
+
+/* ---------- Stats panel ---------- */
+function openPanel(id){ document.querySelectorAll('.panel').forEach(p=>p.hidden=p.id!==id); }
+function closePanels(){ document.querySelectorAll('.panel').forEach(p=>p.hidden=true); }
+const sName = n => surahs[n-1].name.replace(/^سُورَةُ\s*/,'');
+const fmtDate = t => new Date(t).toLocaleDateString('ar-EG', {day:'numeric', month:'short'});
+
+function renderStats(){
+  const st=streak();
+  $('#stStreak').textContent=toAr(st);
+  $('#stStreakNote').textContent = (day().words ? 'قرأت النهارده — كمّل بكرة' : 'اقرأ النهارده عشان السلسلة ما تقطعش');
+  const d=day();
+  $('#stToday').innerHTML='';
+  [['آيات',d.ayahs],['كلمات',d.words],['دقائق',goalValue('minutes')],['أخطاء',d.mistakes]].forEach(([l,v])=>{
+    const k=document.createElement('div'); k.className='kpi';
+    k.innerHTML=`<b>${toAr(v)}</b><span>${l}</span>`; $('#stToday').appendChild(k);
+  });
+  // goals
+  const G=$('#stGoals'); G.innerHTML='';
+  if(!S.goals.length) G.innerHTML='<p class="muted">مفيش أهداف — أضف هدف تحت.</p>';
+  S.goals.forEach((g,gi)=>{
+    const v=goalValue(g.type), pct=Math.min(100, Math.round(v/g.target*100));
+    const row=document.createElement('div'); row.className='goal';
+    row.innerHTML=`<div class="gl"><div class="gt"><span>${GOAL_NAMES[g.type]}</span><span>${toAr(v)} / ${toAr(g.target)}${v>=g.target?' ✔':''}</span></div><div class="bar2"><i style="width:${pct}%"></i></div></div><button class="mini" aria-label="احذف الهدف">✕</button>`;
+    row.querySelector('button').onclick=()=>{ S.goals.splice(gi,1); saveStats(); renderStats(); };
+    G.appendChild(row);
+  });
+  // heatmap: 16 weeks ending this week, columns are weeks (Saturday first)
+  const H=$('#stHeat'); H.innerHTML='';
+  const end=new Date(), start=new Date(end);
+  start.setDate(end.getDate() - (end.getDay()+1)%7 - 7*15);
+  for(const t=new Date(start); t<=end; t.setDate(t.getDate()+1)){
+    const a=(S.days[dkey(t)]||{}).ayahs||0, c=document.createElement('i');
+    c.className = a>=40?'l4':a>=15?'l3':a>=5?'l2':a>0?'l1':'';
+    c.title=`${dkey(t)}: ${a} آية`; H.appendChild(c);
+  }
+  // weak / strong surahs
+  const rows=Object.entries(S.surahs).map(([n,v])=>({n:+n, ...v, rate:v.words? v.mistakes/v.words : 0}));
+  const weak=rows.filter(r=>r.words>=20 && r.mistakes>0).sort((a,b)=>b.rate-a.rate).slice(0,5);
+  const strong=rows.filter(r=>r.words>=50).sort((a,b)=>a.rate-b.rate).slice(0,5);
+  fillSurahList($('#stWeak'), weak, 'لسه مفيش بيانات كفاية — سمّع أكتر.');
+  fillSurahList($('#stStrong'), strong, 'لما تسمّع ٥٠ كلمة أو أكتر من سورة هتظهر هنا.');
+  // mistake log, newest first, with how often the same word was missed
+  const L=$('#stLog'); L.innerHTML='';
+  const freq={}; S.log.forEach(e=>{ const k=e.s+':'+e.a+':'+e.wi; freq[k]=(freq[k]||0)+1; });
+  const recent=S.log.slice(-60).reverse();
+  if(!recent.length) L.innerHTML='<li class="muted">مفيش أخطاء متسجلة لسه.</li>';
+  recent.forEach(e=>{
+    const li=document.createElement('li'), f=freq[e.s+':'+e.a+':'+e.wi];
+    li.innerHTML=`<span class="q"></span><div class="grow"><div class="where"></div><small></small></div>`;
+    li.querySelector('.q').textContent=e.w;
+    li.querySelector('.where').textContent=`${sName(e.s)} — آية ${toAr(e.a)}${f>1?` — تكررت ${toAr(f)} مرات`:''}`;
+    li.querySelector('small').textContent=`${fmtDate(e.t)}${e.said?' — سُمع: '+e.said:''}`;
+    if(e.clip){ const b=document.createElement('button'); b.className='mini'; b.textContent='▶'; b.setAttribute('aria-label','اسمع صوتك'); b.onclick=()=>playClip(e.clip); li.appendChild(b); }
+    const o=document.createElement('button'); o.className='mini'; o.textContent='افتح'; o.onclick=()=>openAt(e.s, e.a); li.appendChild(o);
+    L.appendChild(li);
+  });
+}
+function fillSurahList(ul, rows, empty){
+  ul.innerHTML='';
+  if(!rows.length){ ul.innerHTML=`<li class="muted">${empty}</li>`; return; }
+  rows.forEach(r=>{
+    const li=document.createElement('li');
+    li.innerHTML=`<div class="grow"><div class="q"></div><small></small></div><button class="mini">افتح</button>`;
+    li.querySelector('.q').textContent=surahs[r.n-1].name;
+    li.querySelector('small').textContent=`${toAr(r.words)} كلمة — نسبة الخطأ ${toAr(Math.round(r.rate*100))}٪`;
+    li.querySelector('button').onclick=()=>openAt(r.n, 1);
+    ul.appendChild(li);
+  });
+}
+function openAt(s, a){
+  stopListening(); autoMode=false; detecting=false; test=null;
+  renderSurah(s, a, surahs[s-1].numberOfAyahs);
+  closePanels(); toggleSheet(false);
+}
+
+/* ---------- Similar verses (mutashabihat) ----------
+   Two ayahs are similar when they share a run of 4 words. Built once, on demand. */
+let simData=null;
+function buildSim(){
+  if(simData || !flat) return simData;
+  const N=flat.n, G=4, grams=new Map(), starts=new Map();
+  for(let i=0;i<N.length;i++){ const k=flat.s[i]+':'+flat.a[i]; if(!starts.has(k)) starts.set(k,i); }
+  for(let i=0;i+G<=N.length;i++){
+    if(flat.s[i+G-1]!==flat.s[i] || flat.a[i+G-1]!==flat.a[i]) continue;
+    const key=N[i]+' '+N[i+1]+' '+N[i+2]+' '+N[i+3];
+    let l=grams.get(key); if(!l) grams.set(key, l=[]); l.push(i);
+  }
+  const mark=new Uint8Array(N.length), pairs=new Map();
+  for(const l of grams.values()){
+    if(l.length<2) continue;
+    const keys=[...new Set(l.map(i=>flat.s[i]+':'+flat.a[i]))];
+    if(keys.length<2 || keys.length>30) continue;            // very common phrases are noise
+    l.forEach(i=>{ for(let t=0;t<G;t++) mark[i+t]=1; });
+    for(const a of keys){
+      let m=pairs.get(a); if(!m) pairs.set(a, m=new Map());
+      for(const b of keys) if(b!==a) m.set(b, (m.get(b)||0)+1);
+    }
+  }
+  return simData={mark, pairs, starts};
+}
+const simOn = () => $('#simOn').checked;
+function simWord(i){
+  if(!simOn() || !simData) return false;
+  const w=words[i], st=simData.starts.get(curSurah+':'+w.ayah);
+  if(st==null) return false;
+  for(let t=0;t<(w.k||1);t++) if(simData.mark[st+w.wi+t]) return true;
+  return false;
+}
+function applySim(){
+  $('#mushaf').classList.toggle('sim', simOn());
+  if(simOn()) buildSim();
+  document.querySelectorAll('#mushaf .an').forEach(mk=>{
+    mk.classList.toggle('sm', simOn() && !!simData && simData.pairs.has(mk.dataset.s+':'+mk.dataset.a));
+  });
+  if(words.length) render(committed);
+}
+function plainUthmani(n, a){
+  const raw=uthmani && uthmani[n-1] && uthmani[n-1][a-1];
+  return raw ? raw.replace(/\d+~/g,'').replace(TJ,'$2') : surahs[n-1].ayahs[a-1];
+}
+function openSimilar(n, a){
+  buildSim();
+  const m=simData && simData.pairs.get(n+':'+a);
+  $('#simTitle').textContent=`آيات تشبه ${sName(n)} — آية ${toAr(a)}`;
+  const ul=$('#simList'); ul.innerHTML='';
+  const head=document.createElement('li');
+  head.innerHTML='<div class="grow"><div class="q"></div><small>الآية اللي اخترتها</small></div>';
+  head.querySelector('.q').textContent=plainUthmani(n, a);
+  ul.appendChild(head);
+  if(!m){ const li=document.createElement('li'); li.className='muted'; li.textContent='مفيش آيات متشابهة معاها.'; ul.appendChild(li); }
+  else [...m.entries()].sort((x,y)=>y[1]-x[1]).slice(0,20).forEach(([k])=>{
+    const [s2,a2]=k.split(':').map(Number), li=document.createElement('li');
+    li.innerHTML='<div class="grow"><div class="q"></div><small></small></div><button class="mini">افتح</button>';
+    li.querySelector('.q').textContent=plainUthmani(s2, a2);
+    li.querySelector('small').textContent=`${sName(s2)} — آية ${toAr(a2)}`;
+    li.querySelector('button').onclick=()=>openAt(s2, a2);
+    ul.appendChild(li);
+  });
+  openPanel('simPanel');
+}
+
+/* ---------- Random test from your memorization ----------
+   Picks random ayahs in a juz range; shows the first 3 words; you continue for 1–3 ayahs. */
+let test=null;
+function startTest(){
+  let f=+$('#tFrom').value||30, t=+$('#tTo').value||30; if(t<f) [f,t]=[t,f];
+  const len=+$('#tLen').value||1, count=Math.max(1, Math.min(50, +$('#tCount').value||5));
+  const pool=[];
+  surahs.forEach(s=>s.juz.forEach((j,ai)=>{ if(j>=f && j<=t && ai+len<=s.numberOfAyahs) pool.push({s:s.number, a:ai+1, len}); }));
+  if(!pool.length){ showMsg('مفيش آيات في النطاق ده.', true); return; }
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  autoMode=false; detecting=false;
+  test={qs:pool.slice(0, count), i:-1, res:[]};
+  setMode('hide'); toggleSheet(false);
+  nextQuestion();
+}
+function nextQuestion(){
+  if(!test) return;
+  test.i++;
+  if(test.i>=test.qs.length){ finishTest(); return; }
+  const q=test.qs[test.i];
+  renderSurah(q.s, q.a, q.a+q.len-1);
+  const cue=Math.min(3, words.length-1);
+  for(let k=0;k<cue;k++) committed.marks[k]={s:'hint', cue:true};
+  committed.pos=cue; render(committed);
+  showMsg(`سؤال ${toAr(test.i+1)} من ${toAr(test.qs.length)}: كمّل بعد الكلمات الظاهرة`);
+}
+function questionDone(){
+  const q=test.qs[test.i];
+  q.errors=countErrors(committed);
+  q.hints=committed.marks.filter(m=>m && m.s==='hint' && !m.cue).length;
+  showMsg(q.errors ? `خلص السؤال — ${toAr(q.errors)} خطأ` : 'ممتاز! من غير أخطاء');
+  setTimeout(nextQuestion, 1400);
+}
+function finishTest(){
+  const qs=test.qs; test=null;
+  stopListening();
+  const done=qs.filter(q=>q.errors!=null), perfect=done.filter(q=>!q.errors && !q.hints).length;
+  $('#tScore').textContent=`${toAr(perfect)}/${toAr(qs.length)}`;
+  $('#tScoreNote').textContent='أسئلة من غير أخطاء ولا تلميحات';
+  const ul=$('#tList'); ul.innerHTML='';
+  qs.forEach(q=>{
+    const li=document.createElement('li');
+    li.innerHTML='<div class="grow"><div class="where"></div><small></small></div><button class="mini">افتح</button>';
+    li.querySelector('.where').textContent=`${sName(q.s)} — من آية ${toAr(q.a)}`;
+    li.querySelector('small').textContent= q.errors==null ? 'ما اتجاوبش' : `${toAr(q.errors)} خطأ — ${toAr(q.hints)} تلميح`;
+    li.querySelector('button').onclick=()=>openAt(q.s, q.a);
+    ul.appendChild(li);
+  });
+  openPanel('testPanel');
+}
+
+/* ---------- Display options ---------- */
+function applyOpts(){
+  $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
+  $('#tjLegend').hidden=!$('#tjOn').checked;
+  applySim();
+  store.set('q_opts', {tj:$('#tjOn').checked, sim:$('#simOn').checked, rec:$('#recOn').checked, beep:$('#beep').checked});
+}
+(function(){
+  const o=store.get('q_opts');
+  if(o){ $('#tjOn').checked=o.tj!==false; $('#simOn').checked=!!o.sim; $('#recOn').checked=o.rec!==false; $('#beep').checked=o.beep!==false; }
+  // on phones a second mic user can starve speech recognition: recording starts off there
+  else if(/Android|iPhone|iPad/i.test(navigator.userAgent)) $('#recOn').checked=false;
+  ['#tjOn','#simOn','#recOn','#beep'].forEach(id=>$(id).onchange=applyOpts);
+  $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
+  $('#tjLegend').hidden=!$('#tjOn').checked;
+  $('#mushaf').classList.toggle('sim', $('#simOn').checked);
+})();
+$('#statsBtn').onclick=()=>{ renderStats(); openPanel('statsPanel'); };
+document.querySelectorAll('.panel [data-close]').forEach(b=>b.onclick=closePanels);
+$('#gAdd').onclick=()=>{
+  const t=Math.max(1, +$('#gTarget').value||1);
+  S.goals.push({type:$('#gType').value, target:t}); saveStats(); renderStats();
+};
+$('#testBtn').onclick=startTest;
 
 /* ---------- Wiring ---------- */
 $('#surah').onchange=onSurahChange;
