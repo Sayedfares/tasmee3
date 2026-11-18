@@ -1031,7 +1031,7 @@ async function startNative(){
 const LOCAL_LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/+esm';
 const LOCAL_MODEL='nael239/tasme3-whisper-base-ar-quran-web';
 const LOCAL_OK=!NSR && !window.claude && !!navigator.mediaDevices && !!window.AudioWorkletNode;
-const LOC={lastLen:0, asr:null, worker:null, loading:null, ctx:null, stream:null, buf:[], len:0, speaking:false, quiet:0, since:0, busy:false, floor:.004};
+const LOC={lastLen:0, lastTxt:'', lastN:0, asr:null, worker:null, loading:null, ctx:null, stream:null, buf:[], len:0, speaking:false, quiet:0, since:0, busy:false, floor:.004};
 $('#localRow').hidden=!LOCAL_OK;
 /* Inference runs in a worker so the page never freezes while the model decodes. The encoder is
    fed only as many mel frames as the clip has (min 10 s) instead of Whisper's fixed 30 s window,
@@ -1080,13 +1080,15 @@ async function localDecode(final, a){
   a=a||localAudio();
   if(LOC.busy){ if(final) LOC.pendingFinal=a; return; }        // the final text must not be lost behind a running preview
   LOC.busy=true;
-  const id=++localSeq;
+  const id=++localSeq, n=a.length;
   const t=((await new Promise(res=>{ localWait[id]=res; LOC.worker.postMessage({type:'run', id, audio:a}, [a.buffer]); }))||'').trim();
-  if(listening || final){ if(final){ if(t) commitSpoken(t); preview(''); } else preview(t); }
-  if(t) heard(t);
   LOC.busy=false;
   const next=LOC.pendingFinal; LOC.pendingFinal=null;
-  if(next) localDecode(true, next);
+  // a preview that already covered (nearly) the whole phrase is its final text: no second decode
+  const covered = !final && next && n>=next.length-8000;
+  if(final || covered){ if(t) commitSpoken(t); preview(''); if(t) heard(t); }
+  else if(listening){ LOC.lastTxt=t; LOC.lastN=n; preview(t); if(t) heard(t); }
+  if(next && !covered) localDecode(true, next);
 }
 function localFeed(f){
   let s=0; for(let i=0;i<f.length;i++) s+=f[i]*f[i];
@@ -1099,9 +1101,10 @@ function localFeed(f){
   // end of phrase: a short pause (or a 10 s cap, to keep each decode cheap)
   if(LOC.quiet>=350 || LOC.len>=16000*10){
     LOC.speaking=false; LOC.quiet=0; LOC.lastLen=0;
-    if(LOC.len>16000*.4) localDecode(true, localAudio());
-    LOC.buf=[]; LOC.len=0;
-  } else if(!LOC.busy && LOC.len-LOC.lastLen>=16000*.25){ LOC.lastLen=LOC.len; localDecode(false); }   // as fast as the device allows: decode again the moment the last one returns and 0.25 s of new speech is in
+    if(!LOC.busy && LOC.lastTxt && LOC.len-LOC.lastN<=8000){ commitSpoken(LOC.lastTxt); preview(''); }   // the last preview already heard it all
+    else if(LOC.len>16000*.4) localDecode(true, localAudio());
+    LOC.buf=[]; LOC.len=0; LOC.lastTxt=''; LOC.lastN=0;
+  } else if(!LOC.busy && LOC.len>=16000*.8 && LOC.len-LOC.lastLen>=16000*.25){ LOC.lastLen=LOC.len; localDecode(false); }   // as fast as the device allows: decode again the moment the last one returns and 0.25 s of new speech is in
 }
 async function startLocal(){
   listening=true; updateMic(); showMsg('');
