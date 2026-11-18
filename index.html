@@ -372,8 +372,8 @@ function align(st, spoken, final){
     // skipped, and up to 3 unclear words in a row are tolerated before tracking resumes.
     if(st.back!=null){
       const b=st.back;
-      if(b<j && match(s, words[b].n)){ st.back++; st.miss=0; i++; continue; }
-      if(b+1<j && match(s, words[b+1].n)){ st.back+=2; st.miss=0; i++; continue; }   // a word was not heard
+      if(b<j && match(s, words[b].n)){ fixMissed(st, b); st.back++; st.miss=0; i++; continue; }
+      if(b+1<j && match(s, words[b+1].n)){ fixMissed(st, b+1); st.back+=2; st.miss=0; i++; continue; }   // a word was not heard
       if(b<j && !match(s, words[j].n)){
         const k=backTo(st, spoken, i);
         if(k>=0){ st.back=k+1; st.miss=0; i++; continue; }      // started over again
@@ -384,6 +384,15 @@ function align(st, spoken, final){
     if(match(s, words[j].n)){ st.marks[j]=done; st.pos++; i++; continue; }
     if(j+1<words.length && match(s, words[j].n+words[j+1].n)){
       st.marks[j]=done; st.marks[j+1]={s:'ok'}; st.pos+=2; i++; continue;
+    }
+    // moved on past the expected word (forgot it, or after a mistake): follow the reader;
+    // the skipped words stay as red mistakes until re-read correctly
+    const f=aheadTo(st, spoken, i, final);
+    if(f>j){
+      for(let t=j;t<f;t++) if(!(st.marks[t] && st.marks[t].open)){
+        st.marks[t]={s:'bad', said:'', open:true}; st.wrong=(st.wrong||0)+1;
+      }
+      st.marks[f]={s:'ok'}; st.pos=f+1; i++; continue;
     }
     const k=backTo(st, spoken, i);
     if(k>=0){ st.back=k+1; st.miss=0; i++; continue; }       // went back to re-read
@@ -404,6 +413,27 @@ function backTo(st, spoken, i){
     if(match(s, words[k].n) && (next===undefined || match(next, words[k+1].n))) return k;
   }
   return -1;
+}
+
+/* Did the reader move on? Finds a word 1-3 ahead of st.pos that spoken[i] matches.
+   Right after a mistake (expected word open) the very next word is taken at once;
+   otherwise the following spoken word must confirm it, so a wrong word that merely
+   appears a little later still counts as a mistake. */
+function aheadTo(st, spoken, i, final){
+  const s=spoken[i], next=spoken[i+1], j=st.pos, open=!!(st.marks[j] && st.marks[j].open);
+  for(let d=1; d<=3 && j+d<words.length; d++){
+    const k=j+d;
+    if(!match(s, words[k].n)) continue;
+    if(open && d===1) return k;
+    if(next===undefined ? (final && d===1) : (k+1>=words.length || match(next, words[k+1].n))) return k;
+  }
+  return -1;
+}
+
+/* A word left behind as a mistake, now recited correctly while re-reading. */
+function fixMissed(st, b){
+  const m=st.marks[b];
+  if(m && m.open) st.marks[b]={s:'bad', said:m.said};
 }
 
 /* A live (non-matching) word that isn't just the expected word still being heard. */
@@ -560,12 +590,13 @@ function lockOn(i, q){
 
 /* ---------- Rendering ---------- */
 function render(st){
+  const cp = st.back!=null && st.back<st.pos ? st.back : st.pos;   // the cursor follows a re-read
   for(let i=0;i<words.length;i++){
     const w=words[i]; if(!w.el) continue;              // part of a merged Uthmani word
     // a merged word shows its worst part: an open mistake, then a mistake, then hint, then ok
-    let m=st.marks[i], cur=i===st.pos;
+    let m=st.marks[i], cur=i===cp;
     for(let t=1;t<w.k;t++){
-      const p=st.marks[i+t]; if(i+t===st.pos) cur=true;
+      const p=st.marks[i+t]; if(i+t===cp) cur=true;
       if(!p){ if(m && !(m.s==='bad')) m=undefined; continue; }
       if(p.s==='bad' && (!m || m.s!=='bad' || p.open)) m=p;
       else if(p.s==='hint' && m && m.s==='ok') m=p;
@@ -575,9 +606,9 @@ function render(st){
     w.el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
   }
   updateInfo(st);
-  if(st.pos!==lastScroll && words[st.pos]){
-    lastScroll=st.pos;
-    const el=elOf(st.pos), r=el.getBoundingClientRect();
+  if(cp!==lastScroll && words[cp]){
+    lastScroll=cp;
+    const el=elOf(cp), r=el.getBoundingClientRect();
     if(r.top<80 || r.bottom>innerHeight-120) el.scrollIntoView({behavior:'smooth',block:'center'});
   }
   updateStats();
