@@ -95,6 +95,7 @@ input[type=number]{width:78px}
 .w.ok [class^="t-"]{color:inherit}           /* a recited word turns fully green, tajweed colors included */
 .w.hint{color:var(--hint)}
 .w.skip{color:var(--skip)}
+.w.tk{text-decoration:underline wavy #ff7ad9 2px;text-underline-offset:.28em}
 .w.cur{box-shadow:inset 0 -2px 0 var(--green)}
 /* memorization: unread words vanish, leaving only the ruled lines; mistakes become red blurred marks */
 .mask .w:not(.ok):not(.hint):not(.skip):not(.bad){color:transparent}
@@ -257,6 +258,7 @@ input[type=number]{width:78px}
     <label class="chk"><input id="tjOn" type="checkbox" checked> ألوان التجويد</label>
     <label class="chk"><input id="simOn" type="checkbox"> إظهار المتشابهات</label>
     <label class="chk"><input id="recOn" type="checkbox" checked> سجّل صوتي عند الخطأ</label>
+    <label class="chk" id="tkRow" hidden><input id="tkOn" type="checkbox"> مراجعة التشكيل أثناء القراءة (تجريبي، تحميل نحو ٢٤٠ ميجا)</label>
     <label class="chk" id="localRow" hidden><input id="localOn" type="checkbox"> تعرّف محلي على جهازك بدون إنترنت (تجريبي، تحميل نحو ١٠٠ ميجا)</label>
   </div>
   <div class="tjlegend" id="tjLegend">
@@ -432,6 +434,7 @@ let committed={pos:0, marks:[]};   // marks[i] = {s:'ok'|'bad'|'skip'|'hint', sa
 let pending=[];        // unresolved spoken words carried between final results
 let listening=false, rec=null, finalUpTo=0, mode='read', lastScroll=-1;
 let surahs=[];
+const TK={model:null, stop:null, split:null, queue:[], busy:false, starting:false, map:new Map()};   // tashkeel check state (see below)
 
 /* Align spoken (normalized) words against expected text starting at st.pos.
    Strict: any word other than the expected one is a mistake. The expected word is
@@ -680,9 +683,9 @@ function render(st){
       if(p.s==='bad' && (!m || m.s!=='bad' || p.open)) m=p;
       else if(p.s==='hint' && m && m.s==='ok') m=p;
     }
-    let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(m&&m.shown?' shown':'')+(m&&m.s==='bad'&&peek.has(i)?' peek':'')+(cur?' cur':'')+(simWord(i)?' sm':'');
+    let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(m&&m.shown?' shown':'')+(m&&m.s==='bad'&&peek.has(i)?' peek':'')+(cur?' cur':'')+(simWord(i)?' sm':'')+(TK.map.has(i)?' tk':'');
     if(w.el.className!==c) w.el.className=c;
-    w.el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
+    w.el.title = m && m.s==='bad' ? 'سُمع: '+m.said : TK.map.has(i) ? 'تشكيل: سُمع «'+TK.map.get(i).said+'» والصحيح «'+TK.map.get(i).exp+'»' : '';
   }
   updateInfo(st);
   turnToCursor(cp);
@@ -958,7 +961,7 @@ function updateInfo(st){
 }
 
 function reset(){
-  committed={pos:0, marks:[]}; pending=[]; lostBuf=[]; doneShown=false; lastScroll=-1; buzzed=0;
+  committed={pos:0, marks:[]}; TK.map.clear(); TK.queue=[]; pending=[]; lostBuf=[]; doneShown=false; lastScroll=-1; buzzed=0;
   showMsg(''); if(!listening) $('#heard').textContent='اضغط المايك وابدأ القراءة';
   render(committed);
 }
@@ -1100,11 +1103,9 @@ async function startNative(){
 const LOCAL_LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/+esm';
 const LOCAL_MODEL='nael239/tasme3-whisper-base-ar-quran-web';
 const LOCAL_OK=!NSR && !window.claude && !!navigator.mediaDevices && !!window.AudioWorkletNode;
-const LOC={lastLen:0, lastTxt:'', lastN:0, asr:null, worker:null, loading:null, ctx:null, stream:null, buf:[], len:0, speaking:false, quiet:0, since:0, busy:false, floor:.004};
-$('#localRow').hidden=!LOCAL_OK;
-/* Inference runs in a worker so the page never freezes while the model decodes. The encoder is
-   fed only as many mel frames as the clip has (min 10 s) instead of Whisper's fixed 30 s window,
-   which is about 2-3x faster and gives the same text. */
+$('#localRow').hidden=!LOCAL_OK; $('#tkRow').hidden=!LOCAL_OK;
+/* The encoder is fed only as many mel frames as the clip has (min 10 s) instead of Whisper's fixed 30 s
+   window, which is about 2-3x faster and gives the same text. */
 const LOCAL_WORKER=`import {pipeline, env} from '${LOCAL_LIB}';
 let asr=null;
 onmessage=async e=>{
@@ -1123,34 +1124,74 @@ onmessage=async e=>{
     }
   }catch(err){ postMessage({type:'error', id:m.id, error:String(err&&err.message||err)}); }
 };`;
-let localSeq=0, localWait={};
-function localLoad(){
-  if(LOC.asr) return Promise.resolve();
-  if(LOC.loading) return LOC.loading;
-  return LOC.loading=new Promise((ok,fail)=>{
-    const url=URL.createObjectURL(new Blob([LOCAL_WORKER],{type:'text/javascript'}));
-    const w=LOC.worker=new Worker(url,{type:'module'}); URL.revokeObjectURL(url);
+/* A model worker: loads a transformers.js speech model in a worker and runs audio through it, so the
+   page never freezes. run(audio) resolves with the text ('' on failure). */
+function spawnModel(src, label){
+  const url=URL.createObjectURL(new Blob([src],{type:'text/javascript'}));
+  const w=new Worker(url,{type:'module'}); URL.revokeObjectURL(url);
+  const wait={}; let seq=0;
+  const ready=new Promise((ok,fail)=>{
     const seen={};
-    w.onerror=e=>{ LOC.loading=null; LOC.worker=null; fail(new Error(e.message||'worker')); };
+    w.onerror=e=>fail(new Error(e.message||'worker'));
     w.onmessage=e=>{
       const m=e.data;
       if(m.type==='progress'){ const p=m.p;
         if(p.status==='progress' && p.total>5e6){ seen[p.file]=p; let l=0,t=0; for(const k in seen){ l+=seen[k].loaded; t+=seen[k].total; }
-          showMsg('جارِ تحميل نموذج التعرف المحلي (مرة واحدة فقط)… '+toAr(Math.round(100*l/t))+'٪'); } }
-      else if(m.type==='ready'){ LOC.asr=true; showMsg(''); ok(); }
-      else if(m.type==='text'){ const r=localWait[m.id]; delete localWait[m.id]; if(r) r(m.text); }
-      else if(m.type==='error'){ if(m.id!=null){ const r=localWait[m.id]; delete localWait[m.id]; if(r) r(''); } else { LOC.loading=null; fail(new Error(m.error)); } }
+          showMsg('جارِ تحميل '+label+' (مرة واحدة فقط)… '+toAr(Math.round(100*l/t))+'٪'); } }
+      else if(m.type==='ready'){ showMsg(''); ok(m.dev); }
+      else if(m.type==='text'){ const r=wait[m.id]; delete wait[m.id]; if(r) r(m.text); }
+      else if(m.type==='error'){ if(m.id!=null){ const r=wait[m.id]; delete wait[m.id]; if(r) r(''); } else fail(new Error(m.error)); }
     };
     w.postMessage({type:'load'});
   });
+  return {ready, run:audio=>new Promise(res=>{ const id=++seq; wait[id]=res; w.postMessage({type:'run', id, audio}, [audio.buffer]); }), close:()=>w.terminate()};
 }
-function localAudio(){ const a=new Float32Array(LOC.len); let o=0; for(const c of LOC.buf){ a.set(c,o); o+=c.length; } return a; }
+/* Microphone as 16 kHz mono frames of ~100 ms. Returns a function that stops it. */
+async function openMic(onFrame){
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:true, autoGainControl:true}});
+  try{
+    const ctx=new AudioContext({sampleRate:16000});
+    const url=URL.createObjectURL(new Blob(['registerProcessor("faris-tap",class extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c)this.port.postMessage(c.slice());return true}})'],{type:'text/javascript'}));
+    await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+    const tap=new AudioWorkletNode(ctx,'faris-tap');
+    let acc=[], n=0;                                   // worklet frames are 128 samples
+    tap.port.onmessage=e=>{ acc.push(e.data); n+=e.data.length; if(n>=1600){ const f=new Float32Array(n); let o=0; for(const c of acc){ f.set(c,o); o+=c.length; } acc=[]; n=0; onFrame(f); } };
+    ctx.createMediaStreamSource(stream).connect(tap);
+    return ()=>{ stream.getTracks().forEach(t=>t.stop()); ctx.close().catch(()=>{}); };
+  }catch(e){ stream.getTracks().forEach(t=>t.stop()); throw e; }
+}
+/* Splits the mic into phrases: a phrase ends after a short pause (or at maxS seconds).
+   onStart() when speech begins; onFrame(len) while it goes on; onEnd(audio) with the finished phrase. */
+function phraseSplitter({pauseMs, maxS, onStart, onProgress, onEnd}){
+  let buf=[], len=0, speaking=false, quiet=0, floor=.004;
+  const audio=()=>{ const a=new Float32Array(len); let o=0; for(const c of buf){ a.set(c,o); o+=c.length; } return a; };
+  return {
+    audio, get len(){ return len; }, get speaking(){ return speaking; },
+    feed(f){
+      let s=0; for(let i=0;i<f.length;i++) s+=f[i]*f[i];
+      const rms=Math.sqrt(s/f.length), voiced=rms>Math.max(.012, floor*3);
+      if(!voiced && !speaking) floor=floor*.98+rms*.02;                 // learn the room noise while silent
+      if(voiced && !speaking){ speaking=true; quiet=0; if(onStart) onStart(); }
+      buf.push(f); len+=f.length;
+      if(!speaking){ while(len>4800 && buf.length>1) len-=buf.shift().length; return; }      // keep a 0.3 s lead-in
+      quiet = voiced ? 0 : quiet+f.length/16;
+      if(quiet>=pauseMs || len>=16000*maxS){ const a=audio(); speaking=false; quiet=0; buf=[]; len=0; onEnd(a); }
+      else if(onProgress) onProgress(len);
+    },
+    flush(){ if(speaking && len>16000*.5) onEnd(audio()); speaking=false; buf=[]; len=0; }
+  };
+}
+
+const LOC={model:null, loading:null, stop:null, split:null, busy:false, pendingFinal:null, lastLen:0, lastTxt:'', lastN:0};
+function localLoad(){
+  if(!LOC.model) LOC.model=spawnModel(LOCAL_WORKER, 'نموذج التعرف المحلي');
+  return LOC.model.ready;
+}
 async function localDecode(final, a){
-  a=a||localAudio();
   if(LOC.busy){ if(final) LOC.pendingFinal=a; return; }        // the final text must not be lost behind a running preview
   LOC.busy=true;
-  const id=++localSeq, n=a.length;
-  const t=((await new Promise(res=>{ localWait[id]=res; LOC.worker.postMessage({type:'run', id, audio:a}, [a.buffer]); }))||'').trim();
+  const n=a.length;
+  const t=((await LOC.model.run(a))||'').trim();
   LOC.busy=false;
   const next=LOC.pendingFinal; LOC.pendingFinal=null;
   // a preview that already covered (nearly) the whole phrase is its final text: no second decode
@@ -1159,41 +1200,30 @@ async function localDecode(final, a){
   else if(listening){ LOC.lastTxt=t; LOC.lastN=n; preview(t); if(t) heard(t); }
   if(next && !covered) localDecode(true, next);
 }
-function localFeed(f){
-  let s=0; for(let i=0;i<f.length;i++) s+=f[i]*f[i];
-  const rms=Math.sqrt(s/f.length), ms=f.length/16;
-  const voiced=rms>Math.max(.012, LOC.floor*3);
-  if(!voiced && !LOC.speaking) LOC.floor=LOC.floor*.98+rms*.02;      // learn the room noise while silent
-  if(voiced && !LOC.speaking){ LOC.speaking=true; LOC.since=0; }
-  if(!LOC.speaking){ LOC.buf.push(f); LOC.len+=f.length; while(LOC.len>4800 && LOC.buf.length>1){ LOC.len-=LOC.buf.shift().length; } return; }   // keep 0.3 s lead-in
-  LOC.buf.push(f); LOC.len+=f.length; LOC.since+=ms; LOC.quiet = voiced ? 0 : LOC.quiet+ms;
-  // end of phrase: a short pause (or a 10 s cap, to keep each decode cheap)
-  if(LOC.quiet>=350 || LOC.len>=16000*10){
-    LOC.speaking=false; LOC.quiet=0; LOC.lastLen=0;
-    if(!LOC.busy && LOC.lastTxt && LOC.len-LOC.lastN<=8000){ commitSpoken(LOC.lastTxt); preview(''); }   // the last preview already heard it all
-    else if(LOC.len>16000*.4) localDecode(true, localAudio());
-    LOC.buf=[]; LOC.len=0; LOC.lastTxt=''; LOC.lastN=0;
-  } else if(!LOC.busy && LOC.len>=16000*.8 && LOC.len-LOC.lastLen>=16000*.25){ LOC.lastLen=LOC.len; localDecode(false); }   // as fast as the device allows: decode again the moment the last one returns and 0.25 s of new speech is in
+function localSplitter(){
+  return phraseSplitter({
+    pauseMs:350, maxS:10,
+    onStart(){ LOC.lastLen=0; },
+    // as fast as the device allows: decode again the moment the last one returns and 0.25 s of new speech is in
+    onProgress(len){ if(!LOC.busy && len>=16000*.8 && len-LOC.lastLen>=16000*.25){ LOC.lastLen=len; localDecode(false, LOC.split.audio()); } },
+    onEnd(a){
+      if(!LOC.busy && LOC.lastTxt && a.length-LOC.lastN<=8000){ commitSpoken(LOC.lastTxt); preview(''); }   // the last preview already heard it all
+      else if(a.length>16000*.4) localDecode(true, a);
+      LOC.lastTxt=''; LOC.lastN=0;
+    }
+  });
 }
 async function startLocal(){
   listening=true; updateMic(); showMsg('');
   try{
-    if(!LOC.asr && !localStorage.getItem('faris_local_ok')){
+    if(!LOC.model && !localStorage.getItem('faris_local_ok')){
       if(!confirm('التعرف المحلي يحمّل نموذجًا حجمه نحو ١٠٠ ميجا مرة واحدة، ثم يشتغل على جهازك بدون إنترنت. نكمل؟')){ listening=false; updateMic(); $('#localOn').checked=false; applyOpts(); return; }
       try{ localStorage.setItem('faris_local_ok','1'); }catch{}
     }
     await localLoad();
     if(!listening) return;
-    LOC.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:true, autoGainControl:true}});
-    LOC.ctx=new AudioContext({sampleRate:16000});
-    const url=URL.createObjectURL(new Blob(['registerProcessor("faris-tap",class extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c)this.port.postMessage(c.slice());return true}})'],{type:'text/javascript'}));
-    await LOC.ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
-    const tap=new AudioWorkletNode(LOC.ctx,'faris-tap');
-    // worklet frames are 128 samples: gather ~100 ms before analysing
-    let acc=[], n=0;
-    tap.port.onmessage=e=>{ acc.push(e.data); n+=e.data.length; if(n>=1600){ const f=new Float32Array(n); let o=0; for(const c of acc){ f.set(c,o); o+=c.length; } acc=[]; n=0; localFeed(f); } };
-    LOC.ctx.createMediaStreamSource(LOC.stream).connect(tap);
-    LOC.buf=[]; LOC.len=0; LOC.speaking=false; LOC.quiet=0;
+    LOC.split=localSplitter();
+    LOC.stop=await openMic(f=>LOC.split.feed(f));
   }catch(e){
     listening=false; updateMic(); stopLocal();
     const m=String(e && (e.name||e.message)||e);
@@ -1201,13 +1231,117 @@ async function startLocal(){
   }
 }
 function stopLocal(){
-  if(LOC.speaking && LOC.len>16000*.5 && LOC.asr) localDecode(true, localAudio());
-  LOC.speaking=false; LOC.buf=[]; LOC.len=0;
-  if(LOC.stream){ LOC.stream.getTracks().forEach(t=>t.stop()); LOC.stream=null; }
-  if(LOC.ctx){ LOC.ctx.close().catch(()=>{}); LOC.ctx=null; }
+  if(LOC.split) LOC.split.flush();
+  LOC.split=null;
+  if(LOC.stop){ LOC.stop(); LOC.stop=null; }
+}
+
+/* ---------- Tashkeel check while reciting (opt-in, web only) ----------
+   A second, separate model listens in the background: a wav2vec2 CTC model that writes what it hears
+   WITH the vowels (it follows the actual pronunciation, e.g. Warsh «مَلِكِ» vs Hafs «مَالِكِ», not
+   a memorized text). Each finished phrase is queued; when the (slow) result arrives, every heard word
+   with the same letters as the expected word but a different vowel (fatha/damma/kasra) is underlined.
+   It runs ~3x slower than speech in the browser, so only the 2 latest phrases are kept: when behind,
+   older phrases are skipped. Tracking is never blocked by it. */
+const TK_MODEL='mostafanewir70/quran-recitation-ctc-onnx';
+const TK_WORKER=`import {pipeline, env} from '${LOCAL_LIB}';
+let asr=null, dev='wasm';
+const make=d=>pipeline('automatic-speech-recognition','${TK_MODEL}',{dtype:'q4', device:d, progress_callback:p=>postMessage({type:'progress',p})});
+onmessage=async e=>{
+  const m=e.data;
+  try{
+    if(m.type==='load'){
+      env.useBrowserCache=true;
+      try{ if(navigator.gpu && await navigator.gpu.requestAdapter()) dev='webgpu'; }catch{}
+      try{ asr=await make(dev); }catch(err){ if(dev==='webgpu'){ dev='wasm'; asr=await make(dev); } else throw err; }
+      postMessage({type:'ready', dev});
+    } else {
+      let o;
+      try{ o=await asr(m.audio.slice()); }catch(err){ if(dev!=='webgpu') throw err; dev='wasm'; asr=await make(dev); o=await asr(m.audio); }
+      postMessage({type:'text', id:m.id, text:o.text});
+    }
+  }catch(err){ postMessage({type:'error', id:m.id, error:String(err&&err.message||err)}); }
+};`;
+const TK_V={'\u064E':'a','\u064F':'u','\u0650':'i','\u064B':'a','\u064C':'u','\u064D':'i'};   // fatha damma kasra; tanween counts as its vowel
+/* a word as [letter, vowels] units (letters in the same normal form as norm()) */
+function tkUnits(w){
+  const u=[];
+  for(const ch of (w||'')){
+    if(TK_V[ch]){ if(u.length && !u[u.length-1][1].includes(TK_V[ch])) u[u.length-1][1]+=TK_V[ch]; continue; }
+    const c=norm(ch); if(c) u.push([c,'']);
+  }
+  return u;
+}
+/* Index of the first letter whose vowel differs between the expected word and the heard one, or -1.
+   Only a clear difference counts (both have a vowel and they differ): a missing/extra vowel,
+   sukun, shadda, madd and waqf signs differ between spellings too often to judge. */
+function tkDiff(exp, heard, pausal){
+  const a=tkUnits(exp), b=tkUnits(heard);
+  if(a.length!==b.length) return -1;
+  for(let i=0;i<a.length;i++) if(a[i][0]!==b[i][0]) return -1;       // other letters: another word, not a vowel slip
+  for(let i=0;i<a.length-(pausal?1:0);i++){        // at a stop (waqf sign or end of ayah) the last vowel is usually not pronounced
+    const x=[...a[i][1]].sort().join(''), y=[...b[i][1]].sort().join('');
+    if(x && y && x!==y) return i;
+  }
+  return -1;
+}
+/* Match the heard phrase against the words around where the phrase began, and mark the differences. */
+function tkApply(text, pos0){
+  if(!words.length || detecting) return;
+  let k=Math.max(0, pos0-6), hit=false;
+  for(const h of text.split(/\s+/)){
+    const hn=norm(h); if(!hn) continue;
+    let f=-1;
+    for(let j=k; j<Math.min(words.length, k+36); j++){ if(match(hn, words[j].n)){ f=j; break; } }
+    if(f<0) continue;
+    const w=words[f];
+    if(w.k===1 && w.text && tkDiff(w.text, h, /[ۖ-ۜ]/.test(w.text) || !words[f+1] || words[f+1].ayah!==w.ayah)>=0){ TK.map.set(f, {said:h, exp:w.text}); hit=true; }
+    k=f+1;
+  }
+  if(hit) render(committed);
+}
+function tkEnqueue(a, pos0){
+  if(TK.queue.length>=2) TK.queue.shift();
+  TK.queue.push({a, pos0}); tkPump();
+}
+async function tkPump(){
+  if(TK.busy || !TK.queue.length || !TK.model) return;
+  TK.busy=true;
+  const {a, pos0}=TK.queue.shift();
+  const t=((await TK.model.run(a))||'').trim();
+  TK.busy=false;
+  if(t) tkApply(t, pos0);
+  tkPump();
+}
+async function tkStart(){
+  if(TK.stop || TK.starting) return;
+  TK.starting=true;
+  try{
+    if(!TK.model){
+      if(!localStorage.getItem('faris_tk_ok')){
+        if(!confirm('مراجعة التشكيل تحمّل نموذجًا حجمه نحو ٢٤٠ ميجا مرة واحدة (قد ياخد وقت حسب النت)، ثم تشتغل على جهازك. النموذج بطيء على المتصفح: بيراجع جزء من قراءتك لما يتأخر. نكمل؟')){ $('#tkOn').checked=false; applyOpts(); return; }
+        try{ localStorage.setItem('faris_tk_ok','1'); }catch{}
+      }
+      TK.model=spawnModel(TK_WORKER, 'نموذج مراجعة التشكيل');
+    }
+    await TK.model.ready;
+    if(!listening) return;
+    let pos0=0;
+    TK.split=phraseSplitter({pauseMs:450, maxS:15, onStart(){ pos0=committed.pos; }, onEnd(a){ if(a.length>16000*.6) tkEnqueue(a, pos0); }});
+    TK.stop=await openMic(f=>TK.split.feed(f));
+  }catch(e){
+    TK.model=null;
+    showMsg('تعذّر تشغيل مراجعة التشكيل ('+String(e && (e.name||e.message)||e)+'). كمّل بدونها أو أوقفها من القائمة ☰.', true);
+  }finally{ TK.starting=false; }
+}
+function tkStop(){
+  if(TK.split) TK.split.flush();
+  TK.split=null; TK.queue=[];
+  if(TK.stop){ TK.stop(); TK.stop=null; }
 }
 
 function startListening(){
+  if(LOCAL_OK && $('#tkOn').checked) tkStart();
   if(!words.length || detecting) startDetect();
   else if(committed.pos>=words.length) reset();
   doneShown=false;
@@ -1227,7 +1361,7 @@ function stopListening(){
   listening=false;
   if(NSR){ clearTimeout(nTimer); NSR.stop().catch(()=>{}); if(nSession){ commitSpoken(nSession); nSession=''; } }
   if(dict && dict.active()) dict.stop().catch(()=>{});
-  stopLocal();
+  stopLocal(); tkStop();
   if(rec){ try{ rec.stop(); }catch{} rec=null; }
   updateMic(); render(committed);
 }
@@ -1564,14 +1698,14 @@ function applyOpts(){
   $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
   $('#tjLegend').hidden=!$('#tjOn').checked;
   applySim();
-  store.set('q_opts', {tj:$('#tjOn').checked, sim:$('#simOn').checked, rec:$('#recOn').checked, beep:$('#beep').checked, local:$('#localOn').checked});
+  store.set('q_opts', {tj:$('#tjOn').checked, sim:$('#simOn').checked, rec:$('#recOn').checked, beep:$('#beep').checked, local:$('#localOn').checked, tk:$('#tkOn').checked});
 }
 (function(){
   const o=store.get('q_opts');
-  if(o){ $('#tjOn').checked=o.tj!==false; $('#simOn').checked=!!o.sim; $('#recOn').checked=o.rec!==false; $('#beep').checked=o.beep!==false; $('#localOn').checked=!!o.local; }
+  if(o){ $('#tjOn').checked=o.tj!==false; $('#simOn').checked=!!o.sim; $('#recOn').checked=o.rec!==false; $('#beep').checked=o.beep!==false; $('#localOn').checked=!!o.local; $('#tkOn').checked=!!o.tk; }
   // on phones a second mic user can starve speech recognition: recording starts off there
   else if(/Android|iPhone|iPad/i.test(navigator.userAgent)) $('#recOn').checked=false;
-  ['#tjOn','#simOn','#recOn','#beep','#localOn'].forEach(id=>$(id).onchange=applyOpts);
+  ['#tjOn','#simOn','#recOn','#beep','#localOn','#tkOn'].forEach(id=>$(id).onchange=applyOpts);
   $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
   $('#tjLegend').hidden=!$('#tjOn').checked;
   $('#mushaf').classList.toggle('sim', $('#simOn').checked);
