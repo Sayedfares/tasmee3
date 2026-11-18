@@ -66,7 +66,16 @@ input[type=number]{width:78px}
 .sura::before{right:16px}.sura::after{left:16px}
 .sura span{display:inline-block;min-width:55%;border:2px solid var(--frame);border-radius:999px;background:var(--bg);padding:2px 26px;font-family:var(--quran);font-size:26px;line-height:1.6}
 .basmala{text-align:center;font-family:var(--quran);font-size:28px;line-height:2;margin-bottom:6px}
-.pt{--lh:2.55em;font-family:var(--quran);font-size:27px;line-height:var(--lh);text-align:justify;text-align-last:center;
+.pt.lines{--lh:2.3em;background:none}
+.pt.lines .ln{display:flex;justify-content:space-between;align-items:center;white-space:nowrap;height:var(--lh);box-shadow:0 1px 0 var(--rule)}
+.pt.lines .ln.c,.pt.lines .ln.part{justify-content:flex-start;gap:.3em}
+.pt.lines .ln.c{justify-content:center}
+.pt.lines.measure .ln{justify-content:flex-start;gap:.3em;width:max-content}
+.pt.lines .ln.hd{box-shadow:none}
+.pt.lines .ln.hd .sura{margin:4px 0;width:100%;box-sizing:border-box;height:calc(100% - 8px);display:flex;align-items:center;justify-content:center;padding:0 40px}
+.pt.lines .ln.hd .sura span{font-size:.85em;line-height:1.3;padding:0 22px;min-width:0}
+.pt.lines .ln.bs{justify-content:center;box-shadow:none}
+.pt{font-size:var(--fs,27px);--lh:2.55em;font-family:var(--quran);line-height:var(--lh);text-align:justify;text-align-last:center;
   background:repeating-linear-gradient(to bottom,transparent 0 calc(var(--lh) - 1px),var(--rule) calc(var(--lh) - 1px) var(--lh))}
 .an{display:inline-flex;align-items:center;justify-content:center;min-width:1.6em;height:1.6em;padding:0 .12em;font-family:var(--ui);font-size:.5em;font-weight:700;line-height:1;color:var(--muted);border:1.5px solid var(--edge);border-radius:50%;vertical-align:middle;margin:0 .2em}
 .empty{color:var(--muted);text-align:center;padding:70px 10px;line-height:1.9}
@@ -202,7 +211,7 @@ input[type=number]{width:78px}
 .bk-note{font-size:13px;color:var(--muted)}
 .bk-nav{display:flex;justify-content:space-between;gap:8px}
 @media (max-width:480px){.kpis{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:480px){.pt{--lh:2.2em;font-size:calc(23px*var(--k,1))}.wrap{padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px))}.sura span{font-size:calc(22px*var(--k,1));min-width:0}.sura{padding:8px 46px}.basmala{font-size:calc(24px*var(--k,1))}.wrap{padding-bottom:var(--dockh,190px)}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
+@media (max-width:480px){.wrap{padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));padding-bottom:var(--dockh,190px)}.sura span{font-size:22px;min-width:0}.sura{padding:8px 46px}.basmala{font-size:24px}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
 @media (prefers-reduced-motion:reduce){#mushaf>.page.turn-next,#mushaf>.page.turn-prev{animation-duration:1ms}
 .mic.on{animation:none}.w{transition:none}}
 </style>
@@ -747,10 +756,11 @@ function alertError(){
 /* ---------- Loading Quran text (bundled quran.json) ---------- */
 async function init(){
   try{
-    const [r, ru]=await Promise.all([fetch('quran.json'), fetch('uthmani.json').catch(()=>null)]);
+    const [r, ru, rm]=await Promise.all([fetch('quran.json'), fetch('uthmani.json').catch(()=>null), fetch('mushaf.json').catch(()=>null)]);
     if(!r.ok) throw new Error(r.status);
     surahs=(await r.json()).map(s=>({...s, numberOfAyahs:s.ayahs.length}));
     try{ if(ru && ru.ok) uthmani=await ru.json(); }catch{ uthmani=null; }
+    try{ if(rm && rm.ok) mushaf=await rm.json(); }catch{ mushaf=null; }
     const sel=$('#surah'); sel.innerHTML='';
     surahs.forEach(s=>{
       const o=document.createElement('option');
@@ -784,6 +794,51 @@ function loadSelection(){
   renderSurah(n, f, t);
 }
 
+/* ---------- Mushaf page layout ----------
+   mushaf.json holds the Madani mushaf line by line (page -> lines): a line is either a surah banner
+   ("h<surah>"), the basmala ("b") or runs [surah, ayah, firstWord, lastWord] (word index = number of
+   words means the ayah number mark). Source: line numbers from quran.com's public API. */
+let mushaf=null;
+function suraBanner(s){
+  const b=document.createElement('div'); b.className='sura';
+  const bn=document.createElement('span'); bn.textContent=s.name; b.appendChild(bn);
+  return b;
+}
+function mushafLines(pn, n, f, t, s, els, body){
+  body.classList.add('lines');
+  const lines=mushaf[pn-1], used=new Set(); let last=null;
+  lines.forEach((e,i)=>{
+    const ln=document.createElement('div'); ln.className='ln';
+    if(typeof e==='string'){
+      if(e==='h'+n && f===1){ ln.classList.add('hd'); ln.appendChild(suraBanner(s)); }
+      else if(e==='b' && lines[i-1]==='h'+n && f===1){ ln.classList.add('bs'); ln.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; }
+    } else {
+      let partial=false, ends=false;
+      e.forEach(([sn,a,w0,w1])=>{
+        if(sn!==n || a<f || a>t){ partial=true; return; }
+        const list=els[a];
+        for(let k=w0; k<=w1; k++){ if(list[k]){ ln.appendChild(list[k]); used.add(list[k]); } else partial=true; }
+        if(a===s.numberOfAyahs && w1===list.length-1) ends=true;
+      });
+      if(partial) ln.classList.add('part'); else if(ends) ln.classList.add('c');
+      if(ln.firstChild) last=ln;
+    }
+    body.appendChild(ln);
+  });
+  // words the line data does not cover (two ayahs split differently): put them at the end of the page
+  for(let a=f; a<=t; a++){
+    if(s.pages[a-1]!==pn) continue;
+    els[a].forEach(el=>{ if(!used.has(el) && last) last.appendChild(el); });
+  }
+}
+function mushafFlow(pn, n, f, t, s, els, body){           // without mushaf.json: plain running text
+  if(f===1 && s.pages[0]===pn){
+    body.before(suraBanner(s));
+    if(n!==1 && n!==9){ const bs=document.createElement('div'); bs.className='basmala'; bs.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; body.before(bs); }
+  }
+  for(let a=f; a<=t; a++) if(s.pages[a-1]===pn) els[a].forEach(el=>body.append(el,' '));
+}
+
 function renderSurah(n, f, t){
   const s=surahs[n-1];
   curSurah=n;
@@ -793,30 +848,17 @@ function renderSurah(n, f, t){
   box.innerHTML=''; words=[]; peek.clear(); pageEl=null; lastCp=-1;   // first page shows without a turn
   // Laid out on the pages of the Madani mushaf: a page always ends at the end of an ayah.
   const frag=document.createDocumentFragment();
-  let body=null, pageNo=0;
+  const els={}, pageOrder=[];       // els[ayah] = display words, then the ayah number mark
   for(let ai=f-1; ai<t; ai++){
     const an=ai+1;
-    if(s.pages[ai]!==pageNo){
-      pageNo=s.pages[ai];
-      const pg=document.createElement('section'); pg.className='page';
-      if(body){ const d=document.createElement('div'); d.className='pdiv'; d.textContent='صفحة '+toAr(pageNo); pg.appendChild(d); }
-      if(an===1){
-        const b=document.createElement('div'); b.className='sura';
-        const bn=document.createElement('span'); bn.textContent=s.name; b.appendChild(bn); pg.appendChild(b);
-        if(n!==1 && n!==9){
-          const bs=document.createElement('div'); bs.className='basmala';
-          bs.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; pg.appendChild(bs);
-        }
-      }
-      body=document.createElement('div'); body.className='pt'; pg.appendChild(body);
-      frag.appendChild(pg);
-    }
+    const pageNo=s.pages[ai];
+    if(!pageOrder.includes(pageNo)) pageOrder.push(pageNo);
     // Matching runs on the plain words; the page shows Uthmani words with tajweed.
     // One Uthmani word can stand for several plain words (يَـٰٓأَيُّهَا = يا أيها):
     // the first plain word owns the visible span, the others point at it.
     const plain=ayahTokens(n, an, s.ayahs[ai]);
     const disp=uthmaniWords(n, ai, plain.length);
-    let pi=0;
+    let pi=0; const list=els[an]=[];
     disp.forEach(dw=>{
       const el=document.createElement('span');
       el.className='w';
@@ -827,14 +869,21 @@ function renderSurah(n, f, t){
         const tx=plain[pi];
         words.push({text:dw.text||tx, n:norm(tx), ayah:an, wi:pi, page:pageNo, juz:s.juz[ai], el: t?null:el, lead, k:t?0:dw.k});
       }
-      body.append(el, ' ');
+      list.push(el);
     });
     const mk=document.createElement('span'); mk.className='an'; mk.textContent=toAr(an);
     mk.setAttribute('aria-label','آية '+toAr(an));
     mk.dataset.s=n; mk.dataset.a=an;
     mk.onclick=()=>openSimilar(n, an);
-    body.append(mk, ' ');
+    list.push(mk);
   }
+  pageOrder.forEach((pn,k)=>{
+    const pg=document.createElement('section'); pg.className='page';
+    if(k){ const d=document.createElement('div'); d.className='pdiv'; d.textContent='صفحة '+toAr(pn); pg.appendChild(d); }
+    const body=document.createElement('div'); body.className='pt'; pg.appendChild(body);
+    (mushaf ? mushafLines(pn, n, f, t, s, els, body) : mushafFlow(pn, n, f, t, s, els, body));
+    frag.appendChild(pg);
+  });
   box.appendChild(frag);
   logged.clear(); shownToast.clear();
   reset();
@@ -1574,21 +1623,26 @@ function setPage(el, animate){
   updatePnav();
 }
 
-/* On a phone a mushaf page must show whole, without scrolling down the document: the text scale (--k)
-   is the largest one at which the current page and the page buttons fit between the top bar and the dock. */
+/* Each page is sized so its longest line fills the width (as in the printed mushaf), and on a phone
+   so the whole page also fits between the top bar and the dock without scrolling the document. */
 const PHONE=matchMedia('(max-width:480px)');
 function fitPage(){
   const box=$('#mushaf'), el=pageEl;
-  if(!PHONE.matches || !el || !el.isConnected){ box.style.removeProperty('--k'); document.documentElement.style.removeProperty('--dockh'); return; }
+  const pt=el && el.isConnected && el.querySelector('.pt.lines');
+  if(!pt){ box.style.removeProperty('--fs'); return; }
   const dock=document.querySelector('.dock');
-  document.documentElement.style.setProperty('--dockh', (dock.offsetHeight+8)+'px');
-  const navH=pnav.hidden?0:pnav.offsetHeight+18;
-  const avail=innerHeight-dock.offsetHeight-8-navH-(box.getBoundingClientRect().top+scrollY);
-  let lo=.5, hi=1;
-  box.style.setProperty('--k',1);
-  if(el.offsetHeight<=avail) return;
-  for(let i=0;i<7;i++){ const m=(lo+hi)/2; box.style.setProperty('--k',m); if(el.offsetHeight<=avail) lo=m; else hi=m; }
-  box.style.setProperty('--k',lo);
+  if(PHONE.matches) document.documentElement.style.setProperty('--dockh',(dock.offsetHeight+8)+'px');
+  else document.documentElement.style.removeProperty('--dockh');
+  box.style.setProperty('--fs','27px'); pt.classList.add('measure');
+  let mx=0; pt.querySelectorAll('.ln').forEach(l=>{ mx=Math.max(mx,l.offsetWidth); });
+  pt.classList.remove('measure');
+  let fs=mx ? Math.min(27, 27*pt.clientWidth*.99/mx) : 27;
+  if(PHONE.matches){
+    const navH=pnav.hidden?0:pnav.offsetHeight+18;
+    const avail=innerHeight-dock.offsetHeight-8-navH-(box.getBoundingClientRect().top+scrollY);
+    for(let i=0;i<2;i++){ box.style.setProperty('--fs',fs+'px'); const h=el.offsetHeight; if(h>avail) fs*=avail/h; }
+  }
+  box.style.setProperty('--fs',fs+'px');
 }
 addEventListener('resize', ()=>fitPage());
 if(document.fonts) document.fonts.ready.then(()=>fitPage());
