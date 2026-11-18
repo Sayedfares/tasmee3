@@ -97,6 +97,8 @@ input[type=number]{width:78px}
 .pt.svgp .w.cur path{stroke:var(--green);stroke-width:.5}
 .pt.svgp .empty{padding:60px 0;text-align:center;color:var(--muted)}
 .ctx{opacity:.4;padding:0 2px;user-select:none;-webkit-user-select:none}   /* ayahs before the start: context only */
+.mask .ctx{opacity:0}                                                     /* hide mode and tests: whatever is not being read is hidden, not dimmed */
+.testing .an,.testing g[aria-label]{opacity:0}                            /* in a test even the ayah marks are hidden */
 .w.ok{color:var(--green)}
 .w.ok [class^="t-"]{color:inherit}           /* a recited word turns fully green, tajweed colors included */
 .w.hint{color:var(--hint)}
@@ -123,6 +125,15 @@ input[type=number]{width:78px}
 #msg{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(170px + env(safe-area-inset-bottom,0px));z-index:25;width:min(560px,calc(100% - 32px));pointer-events:none}
 .msg{background:var(--surface2);border:1px solid var(--edge);border-radius:12px;padding:10px 14px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);pointer-events:auto}
 .msg.warn{border-color:var(--bad);color:#ffd9d5}
+.auth{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.auth .in{width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.auth h2{margin:0;font-size:26px}
+.auth .sub{margin:0 0 6px;color:var(--muted)}
+.auth form{display:flex;flex-direction:column;gap:10px}
+.auth input{width:100%;text-align:start}
+.auth .or{color:var(--muted);font-size:13px;margin-top:6px}
+.auth .link{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;padding:8px;min-height:40px}
+.auth .err{color:#ffb4ab;min-height:20px;font-size:14px}
 .idle{position:fixed;z-index:45;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 84px);max-width:420px;margin:0 auto;background:var(--surface2);border:1px solid var(--edge);border-radius:14px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:16px}
 .idle .acts{display:flex;gap:8px}
 
@@ -270,6 +281,7 @@ input[type=number]{width:78px}
     <label class="field">إلى آية<input id="to" type="number" min="1" value="7"></label>
     <button class="btn primary" id="load">افتح السورة</button>
     <button class="btn" id="dlBtn">تنزيل كتب وتفاسير</button>
+    <button class="btn" id="acctBtn" hidden>الحساب</button>
   </div>
   <div class="toggles">
     <label class="chk"><input id="beep" type="checkbox" checked> تنبيه صوتي عند الخطأ</label>
@@ -356,6 +368,25 @@ input[type=number]{width:78px}
     <div class="card"><div class="bk-note" id="bkNote" hidden></div><div class="bk-text" id="bkText"></div></div>
     <div class="bk-nav"><button class="btn" id="bkPrev">الآية السابقة</button><button class="btn" id="bkNext">الآية التالية</button></div>
     <div class="credit">التفسير الميسر وكتب الإعراب من <a href="https://quranpedia.net" target="_blank" rel="noopener" style="color:inherit">الموسوعة القرآنية quranpedia.net</a> — نسخة البيانات ٢٠٢٦-٠٨-١٠</div>
+  </div>
+</section>
+
+<section class="auth" id="authScreen" hidden aria-label="تسجيل الدخول">
+  <div class="in">
+    <h2>مرحبًا في فارس</h2>
+    <p class="sub">سجّل بحسابك عشان تحتفظ ببياناتك</p>
+    <form id="authForm" autocomplete="on">
+      <input id="authEmail" type="email" inputmode="email" autocomplete="email" placeholder="البريد الإلكتروني" required>
+      <input id="authPass" type="password" autocomplete="current-password" placeholder="كلمة المرور (٦ حروف على الأقل)" minlength="6" required>
+      <button class="btn primary" type="submit" id="authSignup" data-mode="up">إنشاء حساب بالإيميل</button>
+      <button class="btn" type="submit" id="authSignin" data-mode="in">دخول بحساب موجود</button>
+    </form>
+    <div class="or">أو اربط بـ</div>
+    <button class="btn" id="authGoogle">ربط بجوجل</button>
+    <button class="btn" id="authFacebook">ربط بفيس بوك</button>
+    <button class="link" id="authReset">نسيت كلمة المرور؟</button>
+    <div class="err" id="authErr" role="alert"></div>
+    <button class="link" id="authSkip">تخطّي دلوقتي</button>
   </div>
 </section>
 
@@ -750,6 +781,7 @@ function lockOn(i, q){
 
 /* ---------- Rendering ---------- */
 function render(st){
+  $('#mushaf').classList.toggle('testing', !!test);
   const cp = st.back!=null && st.back<st.pos ? st.back : st.pos;   // the cursor follows a re-read
   for(let i=0;i<words.length;i++){
     const w=words[i]; if(!w.el) continue;              // part of a merged Uthmani word
@@ -858,7 +890,7 @@ async function init(){
     try{ if(ru && ru.ok) uthmani=await ru.json(); }catch{ uthmani=null; }
     try{ if(rm && rm.ok) mushaf=await rm.json(); }catch{ mushaf=null; }
     try{                                    // other line layouts (optional): choices in the "mushaf edition" list
-      const rl=await fetch('layouts/index.json'); if(rl.ok) layoutList=await rl.json();
+      layoutList=store.get('q_lay')||[];                 // the line layouts the user downloaded
       layoutList.forEach(l=>{ const o=document.createElement('option'); o.value=l.id; o.textContent=l.name; $('#edSel').appendChild(o); });
       await useLayout(store.get('q_ed'));
       if(!LAYS[store.get('q_ed')] && !['lines','fahd'].includes(store.get('q_ed'))) store.set('q_ed','lines');
@@ -932,9 +964,11 @@ function ayahSpan(L){                                     // [surah][ayah] -> [f
   }
   return m;
 }
+/* Line layouts are optional downloads from github.com/Sayedfares/tasmee3_mushaf (layouts/<id>.json), kept in Cache Storage. */
+const LAY_BASE='https://raw.githubusercontent.com/Sayedfares/tasmee3_mushaf/main/layouts/';
 async function useLayout(id){
   if(!layoutList.some(l=>l.id===id) || LAYS[id]) return;
-  try{ const r=await fetch('layouts/'+id+'.json'); if(r.ok) LAYS[id]=await r.json(); }catch{}
+  try{ const r=await (await caches.open('faris-layouts')).match(LAY_BASE+id+'.json'); if(r) LAYS[id]=await r.json(); }catch{}
 }
 function mushafLines(pn, n, f, t, s, els, body, c, L, pf){     // c = first context ayah (shown dimmed, not tracked); pf(a) = its first page
   body.classList.add('lines');
@@ -2274,6 +2308,38 @@ async function dlMushaf(){
     if(have.size===604){ for(const k of await cache.keys()) await cache.delete(k); have.clear(); paint(); return; }
     await get(Array.from({length:604}, (_,i)=>i+1), all);
   };
+  // line layouts (small): once downloaded they appear in «طبعة المصحف وتقسيم السطور»
+  let lays=null;
+  try{ const r=await fetch(LAY_BASE+'index.json'); if(!r.ok) throw 0; lays=await r.json(); store.set('q_layidx', lays); }catch{ lays=store.get('q_layidx'); }
+  if(lays && lays.length){
+    const h2=document.createElement('h3'); h2.textContent='تقسيمات السطور'; box.insertBefore(h2, box.firstChild);
+    const ul=document.createElement('ul'); ul.className='list'; box.insertBefore(ul, h2.nextSibling);
+    lays.forEach(l=>{
+      const li2=document.createElement('li'), n2=document.createElement('div'); n2.className='grow'; n2.textContent=l.name;
+      const b=document.createElement('button'); b.className='btn';
+      const has=()=>(store.get('q_lay')||[]).some(x=>x.id===l.id);
+      const paint2=()=>{ b.textContent=has()?'حذف':'تنزيل'; b.disabled=false; };
+      b.onclick=async()=>{
+        b.disabled=true;
+        const lc=await caches.open('faris-layouts'), url=LAY_BASE+l.id+'.json';
+        if(has()){
+          await lc.delete(url); layoutList=layoutList.filter(x=>x.id!==l.id); delete LAYS[l.id]; store.set('q_lay', layoutList);
+          [...$('#edSel').options].filter(o=>o.value===l.id).forEach(o=>o.remove());
+          if(store.get('q_ed')===l.id){ store.set('q_ed','lines'); $('#edSel').value='lines'; }
+        }else{
+          try{
+            const r=await fetch(url); if(!r.ok) throw 0;
+            await lc.put(url, new Response(await r.blob(), {headers:{'content-type':'application/json'}}));
+            layoutList.push({id:l.id, name:l.name}); store.set('q_lay', layoutList);
+            const o=document.createElement('option'); o.value=l.id; o.textContent=l.name; $('#edSel').appendChild(o);
+            showMsg('اتنزّل «'+l.name+'» — اختاره من «طبعة المصحف وتقسيم السطور» في القائمة ☰.');
+          }catch{ showMsg('تعذّر تنزيل التقسيم — تأكد من الاتصال.', true); }
+        }
+        paint2();
+      };
+      paint2(); li2.append(n2, b); ul.appendChild(li2);
+    });
+  }
   const lab=document.createElement('div'); lab.className='credit'; lab.textContent='أو نزّل جزء جزء:'; box.appendChild(lab); box.appendChild(chips);
   for(let j=1;j<=30;j++){
     const c=document.createElement('button'); c.className='mini'; c.textContent=toAr(j); c.title='جزء '+toAr(j)+' (حوالي '+toAr(Math.round(FAHD_MB*range(j).length/604))+' ميجا)';
@@ -2428,6 +2494,69 @@ $('#bkClose').onclick=closePanels;
 $('#bkPrev').onclick=()=>showBook(bk.key, bk.s, bk.a-1);
 $('#bkNext').onclick=()=>showBook(bk.key, bk.s, bk.a+1);
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('#wMenu').hidden) closeWordMenu(); });
+
+/* ---------- Account (Firebase Auth): email, Google, Facebook ----------
+   Shown once when the app opens (skippable). Needs a Firebase project: put its web-app config below
+   (Firebase console → Project settings → Your apps → Web). Until apiKey is filled the screen stays hidden. */
+const FIREBASE_CONFIG={apiKey:'', authDomain:'', projectId:'', appId:''};
+const FB_VER='10.14.1';
+let fbAuth=null, fbMod=null, authUser=null;
+const AUTH_ERR={
+  'auth/invalid-email':'البريد الإلكتروني مش صحيح.', 'auth/missing-password':'اكتب كلمة المرور.',
+  'auth/wrong-password':'كلمة المرور غلط.', 'auth/invalid-credential':'البريد أو كلمة المرور غلط.', 'auth/user-not-found':'مفيش حساب بالبريد ده.',
+  'auth/email-already-in-use':'البريد ده مسجّل قبل كده — جرّب «دخول بحساب موجود».', 'auth/weak-password':'كلمة المرور ضعيفة (٦ حروف على الأقل).',
+  'auth/popup-closed-by-user':'اتقفلت نافذة التسجيل.', 'auth/cancelled-popup-request':'اتقفلت نافذة التسجيل.', 'auth/network-request-failed':'مفيش اتصال بالإنترنت.',
+  'auth/account-exists-with-different-credential':'البريد ده مسجّل بطريقة تانية — ادخل بيها.', 'auth/too-many-requests':'محاولات كتير — استنى شوية وحاول تاني.',
+};
+const authMsg = e => AUTH_ERR[e && e.code] || 'حصلت مشكلة في التسجيل — حاول تاني.';
+const authErr = t => { $('#authErr').textContent=t||''; };
+function authShow(){ if(FIREBASE_CONFIG.apiKey && !authUser && !store.get('q_auth_skip')) $('#authScreen').hidden=false; }
+function authPaint(){
+  $('#acctBtn').hidden=!FIREBASE_CONFIG.apiKey;
+  $('#acctBtn').textContent = authUser ? 'الحساب: '+(authUser.email||authUser.displayName||'مسجّل')+' — خروج' : 'تسجيل الدخول';
+  $('#authScreen').hidden = !FIREBASE_CONFIG.apiKey || !!authUser || (!!store.get('q_auth_skip') && !authForced);
+}
+let authForced=false;
+async function authInit(){
+  if(!FIREBASE_CONFIG.apiKey) return;
+  authShow();
+  try{
+    const app=await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app.js`);
+    fbMod=await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-auth.js`);
+    fbAuth=fbMod.getAuth(app.initializeApp(FIREBASE_CONFIG));
+    fbMod.onAuthStateChanged(fbAuth, u=>{ authUser=u; if(u){ authForced=false; } authPaint(); });
+  }catch{ authErr('تعذّر تحميل خدمة التسجيل — تأكد من الاتصال بالإنترنت.'); }
+  authPaint();
+}
+async function authDo(fn){
+  authErr('');
+  if(!fbMod){ authErr('خدمة التسجيل لسه بتتحمّل — استنى لحظة وحاول تاني.'); return; }
+  try{ await fn(); }catch(e){ authErr(authMsg(e)); }
+}
+const authNative = () => window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+$('#authForm').onsubmit=e=>{
+  e.preventDefault();
+  const up=e.submitter && e.submitter.dataset.mode==='up', em=$('#authEmail').value.trim(), pw=$('#authPass').value;
+  authDo(()=> up ? fbMod.createUserWithEmailAndPassword(fbAuth, em, pw) : fbMod.signInWithEmailAndPassword(fbAuth, em, pw));
+};
+const authSocial = P => () => authDo(async()=>{
+  if(authNative()){ authErr('التسجيل بجوجل وفيسبوك في تطبيق الأندرويد محتاج إعداد إضافي — استخدم الإيميل دلوقتي.'); return; }
+  await fbMod.signInWithPopup(fbAuth, new fbMod[P]());
+});
+$('#authGoogle').onclick=authSocial('GoogleAuthProvider');
+$('#authFacebook').onclick=authSocial('FacebookAuthProvider');
+$('#authReset').onclick=()=>{
+  const em=$('#authEmail').value.trim();
+  if(!em){ authErr('اكتب بريدك الأول وبعدين اضغط «نسيت كلمة المرور».'); return; }
+  authDo(async()=>{ await fbMod.sendPasswordResetEmail(fbAuth, em); authErr('بعتنا لك رابط إعادة تعيين كلمة المرور على بريدك.'); });
+};
+$('#authSkip').onclick=()=>{ store.set('q_auth_skip', 1); authForced=false; authPaint(); };
+$('#acctBtn').onclick=()=>{
+  toggleSheet(false);
+  if(authUser){ authDo(()=>fbMod.signOut(fbAuth)); }
+  else{ authForced=true; authErr(''); authPaint(); }
+};
+authInit();
 
 init();
 </script>
