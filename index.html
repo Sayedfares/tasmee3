@@ -202,7 +202,7 @@ input[type=number]{width:78px}
 .bk-note{font-size:13px;color:var(--muted)}
 .bk-nav{display:flex;justify-content:space-between;gap:8px}
 @media (max-width:480px){.kpis{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:480px){.pt{font-size:calc(23px*var(--k,1))}.sura span{font-size:calc(22px*var(--k,1));min-width:0}.sura{padding:8px 46px}.basmala{font-size:calc(24px*var(--k,1))}.wrap{padding-bottom:var(--dockh,190px)}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
+@media (max-width:480px){.pt{--lh:2.2em;font-size:calc(23px*var(--k,1))}.wrap{padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px))}.sura span{font-size:calc(22px*var(--k,1));min-width:0}.sura{padding:8px 46px}.basmala{font-size:calc(24px*var(--k,1))}.wrap{padding-bottom:var(--dockh,190px)}.tb{width:44px;height:44px}.mic{width:68px;height:68px}.heard{max-width:150px}}
 @media (prefers-reduced-motion:reduce){#mushaf>.page.turn-next,#mushaf>.page.turn-prev{animation-duration:1ms}
 .mic.on{animation:none}.w{transition:none}}
 </style>
