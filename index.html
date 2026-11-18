@@ -564,14 +564,24 @@ function commitTokens(toks){
   // so "lost" means most of what was just said did not match). Works in any selection, not only after auto-detect.
   if(test) return;
   const wrongNow=(committed.wrong||0)-wrong0;
-  lostBuf = wrongNow*2>=toks.length && toks.length ? lostBuf.concat(toks).slice(-12) : [];
-  if(lostBuf.length>=6){
-    const hit=locate(lostBuf.slice(-10), 5);
-    if(hit){
-      const here=words[Math.min(committed.pos, words.length-1)];
-      if(!(flat.s[hit.i]===curSurah && here && Math.abs(flat.a[hit.i]-here.ayah)<=1)) lockOn(hit.i, hit.q);
-    }
-  }
+  lostBuf = lookedAway(wrongNow, toks.length) ? lostBuf.concat(toks).slice(-12) : [];
+  if(lostBuf.length>=4) tryJump(lostBuf, 4);
+}
+
+/* Enough of what was just said missed the expected words that the reader may be somewhere else. The start of the
+   new place can overlap the old one (e.g. both begin «الحمد لله»), so a share of the words is enough; whether it
+   really is another place is decided by locate() finding one clear match elsewhere. */
+const lookedAway=(wrong, n)=>wrong>=2 && wrong*3>=n;
+
+/* The reader went somewhere else (another surah, before or after this one, or far in this one): if the
+   words just said clearly belong to one place in the Quran, open it and continue there. */
+function tryJump(toks, minScore){
+  const hit=locate(toks.slice(-10), minScore);
+  if(!hit) return false;
+  const here=words[Math.min(committed.pos, words.length-1)];
+  if(flat.s[hit.i]===curSurah && here && Math.abs(flat.a[hit.i]-here.ayah)<=1) return false;     // just a slip nearby
+  lockOn(hit.i, hit.q);
+  return true;
 }
 
 function preview(interim){
@@ -584,6 +594,8 @@ function preview(interim){
   const st={pos:committed.pos, marks:committed.marks.slice(), wrong:committed.wrong||0, back:committed.back, miss:committed.miss};
   if(toks.length){
     align(st, stripOpening(pending.concat(toks), st), false);
+    // mostly wrong words: maybe the reader moved elsewhere. Decide on the live text, don't wait for the settled one.
+    if(!test && toks.length>=4 && lookedAway(st.wrong-(committed.wrong||0), toks.length) && tryJump(toks, 4)){ dropNext=toks.length; return; }
     buzzFor(st.wrong);
   }
   render(st);
