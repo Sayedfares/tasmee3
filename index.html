@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <meta charset="utf-8">
-<title>تسميع القرآن</title>
+<title>فارس</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
@@ -54,7 +54,9 @@ button.btn:disabled{opacity:.5;cursor:default}
 .w.hint{color:var(--hint);background:var(--hint-soft)}
 .w.cur{outline:2px dashed var(--accent);outline-offset:2px}
 .mask .w:not(.ok):not(.bad):not(.skip):not(.hint){color:transparent;background:var(--mask);border-radius:6px}
-.mask .w.cur:not(.ok){background:var(--accent-soft)}
+.mask .w.cur:not(.ok):not(.bad){background:var(--accent-soft)}
+.w.bad.open{outline:2px solid var(--bad);outline-offset:2px}
+.mask .w.bad.open{color:transparent;background:var(--bad)}
 .an{font-size:.75em;color:var(--accent);margin:0 4px;white-space:nowrap}
 .empty{font-family:Tajawal,sans-serif;font-size:16px;color:var(--muted);text-align:center;padding:40px 0}
 .bar{position:fixed;inset:auto 0 0 0;background:var(--card);border-top:1px solid var(--line);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -83,7 +85,7 @@ button.btn:disabled{opacity:.5;cursor:default}
 </style>
 <div dir="rtl" lang="ar">
 <div class="wrap">
-  <h1>تسميع القرآن <small>اقرأ وهو بيتابعك ويكشف الأخطاء</small></h1>
+  <h1>فارس <small>تسميع القرآن وكشف الأخطاء</small></h1>
 
   <div class="card">
     <div class="controls">
@@ -101,7 +103,7 @@ button.btn:disabled{opacity:.5;cursor:default}
       <button class="btn" id="autoBtn" disabled>اكتشاف تلقائي</button>
     </div>
     <div class="legend">
-      <span class="s-ok">صحيح</span><span class="s-bad">خطأ في الكلمة</span><span class="s-skip">كلمة ناقصة</span><span class="s-hint">تلميح</span>
+      <span class="s-ok">صحيح</span><span class="s-bad">خطأ — أعد الكلمة لتكمل</span><span class="s-hint">تلميح</span>
       <span style="color:var(--muted)">اضغط على أي كلمة لتبدأ منها</span>
     </div>
     <div id="msg"></div>
@@ -126,7 +128,6 @@ button.btn:disabled{opacity:.5;cursor:default}
     <div class="stats">
       <span class="s-ok">✓ <b id="cOk">0</b></span>
       <span class="s-bad">✗ <b id="cBad">0</b></span>
-      <span class="s-skip">⤼ <b id="cSkip">0</b></span>
       <span class="s-hint">💡 <b id="cHint">0</b></span>
     </div>
     <button class="btn" id="hintBtn" disabled>تلميح</button>
@@ -189,36 +190,37 @@ let listening=false, rec=null, finalUpTo=0, mode='read', lastScroll=-1;
 let surahs=[];
 
 /* Align spoken (normalized) words against expected text starting at st.pos.
-   Returns the spoken words that could not be resolved yet. */
-function align(st, spoken){
+   Strict: any word other than the expected one is a mistake. The expected word is
+   then marked "open" (red, still hidden in memorization mode) and reading cannot
+   move on until that word itself is said. st.wrong counts every wrong word heard.
+   final=false (live, unsettled text) waits for a following word before calling a
+   mistake. Returns the spoken words that could not be resolved yet. */
+function align(st, spoken, final){
   let i=0;
   while(i<spoken.length && st.pos<words.length){
-    const s=spoken[i], next=spoken[i+1], j=st.pos;
-    if(match(s, words[j].n)){ st.marks[j]={s:'ok'}; st.pos++; i++; continue; }
+    const s=spoken[i], j=st.pos, m=st.marks[j], open=!!(m && m.open);
+    const done = open ? {s:'bad', said:m.said} : {s:'ok'};
+    if(match(s, words[j].n)){ st.marks[j]=done; st.pos++; i++; continue; }
     if(j+1<words.length && match(s, words[j].n+words[j+1].n)){
-      st.marks[j]={s:'ok'}; st.marks[j+1]={s:'ok'}; st.pos+=2; i++; continue;
+      st.marks[j]=done; st.marks[j+1]={s:'ok'}; st.pos+=2; i++; continue;
     }
     if(j>0 && match(s, words[j-1].n)){ i++; continue; }      // repeated previous word
-    if(next===undefined) break;                              // need more evidence
-    // skipped words: spoken word matches a word a little ahead, confirmed by the following word
-    let k=-1;
-    for(let d=1; d<=3 && j+d<words.length; d++){
-      if(match(s, words[j+d].n) && (j+d+1>=words.length || match(next, words[j+d+1].n))){ k=j+d; break; }
-    }
-    if(k>0){
-      for(let t=j;t<k;t++) st.marks[t]={s:'skip'};
-      st.marks[k]={s:'ok'}; st.pos=k+1; i++; continue;
-    }
-    // wrong word: next spoken word lines up with the following expected word
-    if(j+1<words.length && match(next, words[j+1].n)){
-      st.marks[j]={s:'bad', said:s}; st.pos++; i++; continue;
-    }
-    i++;                                                     // noise / self-correction
+    if(!final && spoken[i+1]===undefined) break;             // live text may still change
+    st.marks[j]={s:'bad', said:s, open:true};
+    st.wrong=(st.wrong||0)+1; i++;
   }
   return spoken.slice(i);
 }
 
-function countErrors(st){ return st.marks.filter(m=>m && (m.s==='bad'||m.s==='skip')).length; }
+function countErrors(st){ return st.marks.filter(m=>m && m.s==='bad').length; }
+
+/* Words said before the expected text starts (isti'adha, basmala) are not mistakes. */
+function stripOpening(toks, st){
+  const p=st.pos;
+  if(p>0 && st.marks[p-1]) return toks;                      // mid-recitation
+  toks=stripPrefix(toks, ISTIADHA);
+  return words[p] && words[p].n==='بسم' ? toks : stripPrefix(toks, BASMALA);
+}
 
 /* After locking on from a live (unsettled) phrase, that phrase's words were already
    used; the same words arrive again when it settles, so skip them once. */
@@ -230,9 +232,9 @@ function commitSpoken(text){
   commitTokens(toks);
 }
 function commitTokens(toks){
-  const before=countErrors(committed), pos0=committed.pos;
-  pending = align(committed, pending.concat(toks)).slice(-3);
-  if(countErrors(committed)>before) alertError();
+  const before=committed.wrong||0, pos0=committed.pos;
+  pending = align(committed, stripOpening(pending.concat(toks), committed), true);
+  if((committed.wrong||0)>before) alertError();
   // lost track? the reader may have moved to another place
   if(!autoMode) return;
   lostBuf = committed.pos===pos0 ? lostBuf.concat(toks).slice(-12) : [];
@@ -253,7 +255,7 @@ function preview(interim){
     return;
   }
   const st={pos:committed.pos, marks:committed.marks.slice()};
-  if(toks.length) align(st, pending.concat(toks));
+  if(toks.length) align(st, stripOpening(pending.concat(toks), st), false);
   render(st);
 }
 
@@ -349,7 +351,7 @@ function lockOn(i, q){
 function render(st){
   for(let i=0;i<words.length;i++){
     const m=st.marks[i], el=words[i].el;
-    let c='w'+(m?' '+m.s:'')+(i===st.pos?' cur':'');
+    let c='w'+(m?' '+m.s:'')+(m&&m.open?' open':'')+(i===st.pos?' cur':'');
     if(el.className!==c) el.className=c;
     el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
   }
@@ -363,19 +365,18 @@ function render(st){
 }
 
 function updateStats(){
-  const c={ok:0,bad:0,skip:0,hint:0};
+  const c={ok:0,bad:0,hint:0};
   committed.marks.forEach(m=>{ if(m) c[m.s]++; });
-  $('#cOk').textContent=c.ok; $('#cBad').textContent=c.bad;
-  $('#cSkip').textContent=c.skip; $('#cHint').textContent=c.hint;
+  $('#cOk').textContent=c.ok; $('#cBad').textContent=c.bad; $('#cHint').textContent=c.hint;
   const errs=[];
-  committed.marks.forEach((m,i)=>{ if(m && (m.s==='bad'||m.s==='skip')) errs.push(i); });
+  committed.marks.forEach((m,i)=>{ if(m && m.s==='bad') errs.push(i); });
   $('#errors').hidden=!errs.length;
   $('#errList').innerHTML='';
   errs.forEach(i=>{
     const li=document.createElement('li');
     const m=committed.marks[i];
-    li.innerHTML=`<span class="q"></span> — آية ${toAr(words[i].ayah)} ${m.s==='skip'?'(ناقصة)':''}`;
-    li.querySelector('.q').textContent=words[i].text;
+    li.innerHTML=`<span class="q"></span> — آية ${toAr(words[i].ayah)}`;
+    li.querySelector('.q').textContent = m.open ? '…' : words[i].text;   // don't give away the word being retried
     if(m.s==='bad') li.title='سُمع: '+m.said;
     li.onclick=()=>words[i].el.scrollIntoView({behavior:'smooth',block:'center'});
     $('#errList').appendChild(li);
@@ -501,7 +502,9 @@ function jumpTo(i){
 
 function hint(){
   if(committed.pos>=words.length) return;
-  committed.marks[committed.pos]={s:'hint'}; committed.pos++; pending=[];
+  const m=committed.marks[committed.pos];
+  committed.marks[committed.pos] = m && m.open ? {s:'bad', said:m.said} : {s:'hint'};
+  committed.pos++; pending=[];
   render(committed);
 }
 
