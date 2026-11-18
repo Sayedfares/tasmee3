@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>فارس</title>
@@ -103,6 +104,10 @@ input[type=number]{width:78px}
   background:radial-gradient(circle at 50% 35%,#6fe7a3,var(--green) 55%,#3fbf76);box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 22%,transparent),0 0 28px color-mix(in srgb,var(--green) 55%,transparent)}
 .mic:disabled{opacity:.45;cursor:default}
 .mic.on{animation:ring 1.5s ease-out infinite}
+.mic .i-pause,.mic.on .i-mic{display:none}
+.mic.on .i-pause{display:block}
+.chip.rec:not(.live) .dot{opacity:.35;box-shadow:none}
+.chip.rec.live .dot{animation:throb 1s ease-in-out infinite}
 @keyframes ring{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 60%,transparent),0 0 28px color-mix(in srgb,var(--green) 55%,transparent)}100%{box-shadow:0 0 0 22px transparent,0 0 28px color-mix(in srgb,var(--green) 55%,transparent)}}
 .tools{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .chips{display:flex;gap:8px;align-items:center;max-width:100%}
@@ -165,10 +170,12 @@ input[type=number]{width:78px}
 <footer class="dock">
   <div class="in">
     <button class="mic" id="mic" aria-label="ابدأ التسميع" disabled>
-      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+      <svg class="i-mic" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+      <svg class="i-pause" width="36" height="36" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5.5" y="4" width="4.5" height="16" rx="1.2"/><rect x="14" y="4" width="4.5" height="16" rx="1.2"/></svg>
     </button>
     <div class="tools">
       <div class="chips">
+        <span class="chip rec" id="recChip" title="مدة التسميع" hidden><span class="dot"></span><span id="recTime">٠٠:٠٠</span></span>
         <span class="heard chip" id="heard">اضغط المايك وابدأ القراءة</span>
         <span class="chip" title="عدد الأخطاء"><span class="dot"></span><span id="cBadChip">٠</span></span>
       </div>
@@ -260,14 +267,28 @@ function align(st, spoken, final){
       st.marks[j]=done; st.marks[j+1]={s:'ok'}; st.pos+=2; i++; continue;
     }
     if(j>0 && match(s, words[j-1].n)){ i++; continue; }      // repeated previous word
-    if(!final && spoken[i+1]===undefined) break;             // live text may still change
+    // live text may still change: wait for the next word unless this one is clearly wrong
+    if(!final && spoken[i+1]===undefined && !clearlyWrong(s, words[j].n)) break;
     st.marks[j]={s:'bad', said:s, open:true};
     st.wrong=(st.wrong||0)+1; i++;
   }
   return spoken.slice(i);
 }
 
+/* A live (non-matching) word that isn't just the expected word still being heard. */
+function clearlyWrong(s, e){
+  return s.length>=3 && !e.startsWith(s);
+}
+
 function countErrors(st){ return st.marks.filter(m=>m && m.s==='bad').length; }
+
+/* The buzzer fires as soon as live speech shows a mistake; buzzed is how many wrong
+   words (committed + live) have already buzzed, so the settled text doesn't buzz twice. */
+let buzzed=0;
+function buzzFor(wrong){
+  if(wrong>buzzed) alertError();
+  buzzed=wrong;
+}
 
 /* Words said before the expected text starts (isti'adha, basmala) are not mistakes. */
 function stripOpening(toks, st){
@@ -287,9 +308,9 @@ function commitSpoken(text){
   commitTokens(toks);
 }
 function commitTokens(toks){
-  const before=committed.wrong||0, pos0=committed.pos;
+  const pos0=committed.pos;
   pending = align(committed, stripOpening(pending.concat(toks), committed), true);
-  if((committed.wrong||0)>before) alertError();
+  buzzFor(committed.wrong||0);
   // lost track? the reader may have moved to another place
   if(!autoMode) return;
   lostBuf = committed.pos===pos0 ? lostBuf.concat(toks).slice(-12) : [];
@@ -309,8 +330,11 @@ function preview(interim){
     if(toks.length && key!==lastDetKey){ lastDetKey=key; detectFeed(toks, false); }
     return;
   }
-  const st={pos:committed.pos, marks:committed.marks.slice()};
-  if(toks.length) align(st, stripOpening(pending.concat(toks), st), false);
+  const st={pos:committed.pos, marks:committed.marks.slice(), wrong:committed.wrong||0};
+  if(toks.length){
+    align(st, stripOpening(pending.concat(toks), st), false);
+    buzzFor(st.wrong);
+  }
   render(st);
 }
 
@@ -601,7 +625,7 @@ function updateInfo(st){
 }
 
 function reset(){
-  committed={pos:0, marks:[]}; pending=[]; lostBuf=[]; doneShown=false; lastScroll=-1;
+  committed={pos:0, marks:[]}; pending=[]; lostBuf=[]; doneShown=false; lastScroll=-1; buzzed=0;
   showMsg(''); if(!listening) $('#heard').textContent='اضغط المايك وابدأ القراءة';
   render(committed);
 }
@@ -750,7 +774,21 @@ function stopListening(){
   if(rec){ try{ rec.stop(); }catch{} rec=null; }
   updateMic(); render(committed);
 }
+/* Recording timer: counts time spent listening; pausing keeps the total. */
+let recMs=0, recSince=0, recTick=null;
+function showRecTime(){
+  const s=Math.floor((recMs+(recSince?Date.now()-recSince:0))/1000);
+  $('#recTime').textContent=toAr(String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'));
+}
+function updateRecTimer(){
+  if(listening && !recSince){ recSince=Date.now(); recTick=setInterval(showRecTime, 1000); }
+  if(!listening && recSince){ recMs+=Date.now()-recSince; recSince=0; clearInterval(recTick); }
+  if(listening) $('#recChip').hidden=false;
+  $('#recChip').classList.toggle('live', listening);
+  showRecTime();
+}
 function updateMic(){
+  updateRecTimer();
   $('#mic').classList.toggle('on', listening);
   $('#mic').setAttribute('aria-label', listening?'إيقاف':'ابدأ التسميع');
   if(listening && !$('#heard').textContent.startsWith('🎧')) $('#heard').textContent='🎧 أسمعك…';
