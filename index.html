@@ -270,6 +270,7 @@ input[type=number]{width:78px}
     <label class="chk"><input id="simOn" type="checkbox"> إظهار المتشابهات</label>
     <label class="chk"><input id="recOn" type="checkbox" checked> سجّل صوتي عند الخطأ</label>
     <label class="chk">طبعة المصحف وتقسيم السطور <select id="edSel"><option value="lines">سطور مصحف المدينة (١٥ سطر)</option><option value="fahd">طبعة الملك فهد (صور SVG)</option></select></label>
+    <label class="chk"><input id="followOn" type="checkbox" checked> لما أخلص: ٣ تنبيهات وبعدها يتبعني في أي مكان أقرأ منه</label>
     <label class="chk" id="tkRow" hidden><input id="tkOn" type="checkbox"> مراجعة التشكيل أثناء القراءة (تجريبي، تحميل نحو ٢٤٠ ميجا)</label>
     <label class="chk" id="localRow" hidden><input id="localOn" type="checkbox"> تعرّف محلي على جهازك بدون إنترنت (تجريبي، تحميل نحو ١٠٠ ميجا)</label>
   </div>
@@ -751,10 +752,12 @@ function checkDone(st){
   if(test){ questionDone(); return; }
   const errs=countErrors(committed), total=words.length;
   const text = errs ? `انتهيت ✔ — ${toAr(errs)} خطأ من ${toAr(total)} كلمة. راجع المواضع الملوّنة.` : `ما شاء الله! ${toAr(total)} كلمة بدون أخطاء.`;
-  if(autoMode && listening){
-    // keep listening: whatever is recited next gets detected again
-    detecting=true; detBuf=[]; lostBuf=[]; pending=[];
-    showMsg(text+' كمّل قراءة من أي مكان وهيتعرّف عليها.');
+  if(listening && (autoMode || $('#followOn').checked)){
+    // Keep listening after three buzzes: whatever is recited next is detected anywhere in the Quran
+    // (the next surah, a skip ahead, something else), and the page follows.
+    autoMode=true; detecting=true; detBuf=[]; lostBuf=[]; pending=[]; dropNext=0;
+    alertError(3);
+    showMsg(text+' — كمّل قراءة من أي مكان وهيتعرّف عليها ويمشي معاك.');
     return;
   }
   stopListening();
@@ -773,16 +776,16 @@ function showMsg(t, warn){
 
 /* ---------- Error feedback ---------- */
 let actx=null;
-function alertError(){
-  try{ navigator.vibrate && navigator.vibrate(120); }catch{}
+function alertError(pulses=2){
+  try{ navigator.vibrate && navigator.vibrate(pulses>2 ? [120,100,120,100,120] : 120); }catch{}
   if(!$('#beep').checked) return;
   try{
     actx = actx || new (window.AudioContext||window.webkitAudioContext)();
-    // buzzer: two short, harsh low pulses (two slightly detuned square waves)
+    // buzzer: short, harsh low pulses (two slightly detuned square waves); two for a mistake, three as a heads-up
     const t0=actx.currentTime, g=actx.createGain();
     g.connect(actx.destination);
     g.gain.setValueAtTime(0, t0);
-    [0, 0.24].forEach(at=>{
+    [0, 0.24, 0.48].slice(0, pulses).forEach(at=>{
       g.gain.setValueAtTime(0.12, t0+at);
       g.gain.setValueAtTime(0.12, t0+at+0.17);
       g.gain.linearRampToValueAtTime(0, t0+at+0.19);
@@ -790,7 +793,7 @@ function alertError(){
     [110, 116].forEach(f=>{
       const o=actx.createOscillator();
       o.type='square'; o.frequency.value=f;
-      o.connect(g); o.start(t0); o.stop(t0+0.45);
+      o.connect(g); o.start(t0); o.stop(t0+0.25*pulses);
     });
   }catch{}
 }
@@ -1820,14 +1823,14 @@ function applyOpts(){
   $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
   $('#tjLegend').hidden=!$('#tjOn').checked;
   applySim();
-  store.set('q_opts', {tj:$('#tjOn').checked, sim:$('#simOn').checked, rec:$('#recOn').checked, beep:$('#beep').checked, local:$('#localOn').checked, tk:$('#tkOn').checked});
+  store.set('q_opts', {tj:$('#tjOn').checked, sim:$('#simOn').checked, rec:$('#recOn').checked, beep:$('#beep').checked, follow:$('#followOn').checked, local:$('#localOn').checked, tk:$('#tkOn').checked});
 }
 (function(){
   const o=store.get('q_opts');
-  if(o){ $('#tjOn').checked=o.tj!==false; $('#simOn').checked=!!o.sim; $('#recOn').checked=o.rec!==false; $('#beep').checked=o.beep!==false; $('#localOn').checked=!!o.local; $('#tkOn').checked=!!o.tk; }
+  if(o){ $('#tjOn').checked=o.tj!==false; $('#simOn').checked=!!o.sim; $('#recOn').checked=o.rec!==false; $('#beep').checked=o.beep!==false; $('#followOn').checked=o.follow!==false; $('#localOn').checked=!!o.local; $('#tkOn').checked=!!o.tk; }
   // on phones a second mic user can starve speech recognition: recording starts off there
   else if(/Android|iPhone|iPad/i.test(navigator.userAgent)) $('#recOn').checked=false;
-  ['#tjOn','#simOn','#recOn','#beep','#localOn','#tkOn'].forEach(id=>$(id).onchange=applyOpts);
+  ['#tjOn','#simOn','#recOn','#beep','#followOn','#localOn','#tkOn'].forEach(id=>$(id).onchange=applyOpts);
   $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
   $('#tjLegend').hidden=!$('#tjOn').checked;
   $('#mushaf').classList.toggle('sim', $('#simOn').checked);
