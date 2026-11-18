@@ -1,0 +1,3 @@
+[submodule "mushaf"]
+	path = mushaf
+	url = https://github.com/Sayedfares/tasmee3_mushaf.git
