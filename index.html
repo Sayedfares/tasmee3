@@ -1746,9 +1746,9 @@ function tkStop(){
   if(TK.stop){ TK.stop(); TK.stop=null; }
 }
 
-/* Silence: after 5 s without a word the reader is asked "close the session?"; no answer within 3 s closes it. */
+/* Silence: after 10 s without a word the reader is asked "close the session?"; no answer within 3 s closes it. */
 let lastSpeech=0, idleEnd=0;
-const IDLE_ASK_MS=5000, IDLE_CLOSE_MS=3000;
+const IDLE_ASK_MS=10000, IDLE_CLOSE_MS=3000;
 function idleHide(){ idleEnd=0; $('#idleBox').hidden=true; }
 $('#idleKeep').onclick=()=>{ lastSpeech=Date.now(); idleHide(); };
 $('#idleStop').onclick=()=>{ idleHide(); stopListening(); };
