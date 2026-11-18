@@ -98,6 +98,7 @@ button.btn:disabled{opacity:.5;cursor:default}
       </div>
       <label class="chk"><input id="beep" type="checkbox" checked> تنبيه صوتي عند الخطأ</label>
       <button class="btn" id="load">تحميل</button>
+      <button class="btn" id="autoBtn" disabled>اكتشاف تلقائي</button>
     </div>
     <div class="legend">
       <span class="s-ok">صحيح</span><span class="s-bad">خطأ في الكلمة</span><span class="s-skip">كلمة ناقصة</span><span class="s-hint">تلميح</span>
@@ -162,12 +163,22 @@ function lev(a,b){
   }
   return prev[b.length];
 }
+const matchMemo=new Map();
 function match(s,e){
   if(!s||!e) return false;
   if(s===e) return true;
-  const min=Math.min(s.length,e.length);
+  const min=Math.min(s.length,e.length), max=Math.max(s.length,e.length);
   if(min<=2) return false;                       // short words must be exact
-  return 1 - lev(s,e)/Math.max(s.length,e.length) >= (min<=4 ? 0.75 : 0.7);
+  const need = min<=4 ? 0.75 : 0.7;
+  if(1-(max-min)/max < need) return false;       // lengths too different
+  const key=s+'|'+e;
+  let r=matchMemo.get(key);
+  if(r===undefined){
+    r = 1 - lev(s,e)/max >= need;
+    if(matchMemo.size>200000) matchMemo.clear();
+    matchMemo.set(key, r);
+  }
+  return r;
 }
 
 /* ---------- State ---------- */
@@ -209,16 +220,129 @@ function align(st, spoken){
 
 function countErrors(st){ return st.marks.filter(m=>m && (m.s==='bad'||m.s==='skip')).length; }
 
+/* After locking on from a live (unsettled) phrase, that phrase's words were already
+   used; the same words arrive again when it settles, so skip them once. */
+let dropNext=0, lastDetKey='';
+
 function commitSpoken(text){
-  const before=countErrors(committed);
-  pending = align(committed, pending.concat(tokenize(text))).slice(-3);
+  const toks=tokenize(text).slice(dropNext); dropNext=0;
+  if(detecting){ detectFeed(toks, true); return; }
+  commitTokens(toks);
+}
+function commitTokens(toks){
+  const before=countErrors(committed), pos0=committed.pos;
+  pending = align(committed, pending.concat(toks)).slice(-3);
   if(countErrors(committed)>before) alertError();
+  // lost track? the reader may have moved to another place
+  if(!autoMode) return;
+  lostBuf = committed.pos===pos0 ? lostBuf.concat(toks).slice(-12) : [];
+  if(lostBuf.length>=6){
+    const hit=locate(lostBuf.slice(-10), 5);
+    if(hit){
+      const here=words[Math.min(committed.pos, words.length-1)];
+      if(!(flat.s[hit.i]===curSurah && here && Math.abs(flat.a[hit.i]-here.ayah)<=1)) lockOn(hit.i, hit.q);
+    }
+  }
 }
 
 function preview(interim){
+  const toks=tokenize(interim).slice(dropNext);
+  if(detecting){
+    const key=toks.join(' ');
+    if(toks.length && key!==lastDetKey){ lastDetKey=key; detectFeed(toks, false); }
+    return;
+  }
   const st={pos:committed.pos, marks:committed.marks.slice()};
-  if(interim) align(st, pending.concat(tokenize(interim)));
+  if(toks.length) align(st, pending.concat(toks));
   render(st);
+}
+
+/* ---------- Auto-detect: find what is being recited anywhere in the Quran ---------- */
+let flat=null;                 // every word of the Quran: normalized text, surah, ayah, index in ayah
+let detecting=false, autoMode=false, detBuf=[], lostBuf=[], curSurah=0;
+
+function ayahTokens(sn, an, text){
+  let toks=text.split(/\s+/).filter(x=>norm(x));
+  if(sn!==1 && an===1 && toks.slice(0,4).map(norm).join(' ')==='بسم الله الرحمن الرحيم') toks=toks.slice(4);
+  return toks;
+}
+function buildFlat(){
+  flat={n:[], s:[], a:[], w:[], idx:new Map(), cache:new Map()};
+  surahs.forEach(s=>s.ayahs.forEach((text,ai)=>{
+    ayahTokens(s.number, ai+1, text).forEach((tx,wi)=>{
+      const n=norm(tx), p=flat.n.length;
+      flat.n.push(n); flat.s.push(s.number); flat.a.push(ai+1); flat.w.push(wi);
+      if(!flat.idx.has(n)) flat.idx.set(n, []);
+      flat.idx.get(n).push(p);
+    });
+  }));
+}
+/* Every position whose word matches spoken word w (searches distinct words, then expands). */
+function positionsOf(w){
+  if(flat.cache.has(w)) return flat.cache.get(w);
+  const out=[];
+  for(const [v, ps] of flat.idx) if(match(w, v)) for(const p of ps) out.push(p);
+  if(flat.cache.size>300) flat.cache.clear();
+  flat.cache.set(w, out);
+  return out;
+}
+
+const ISTIADHA=['اعوذ','بالله','من','الشيطان','الرجيم'], BASMALA=['بسم','الله','الرحمن','الرحيم'];
+function stripPrefix(q, seq){
+  let k=0; while(k<q.length && k<seq.length && match(q[k], seq[k])) k++;
+  return (k>=2 || k===q.length) ? q.slice(k) : q;
+}
+
+/* Tolerant walk of spoken words q against the Quran from word i; returns how many line up. */
+function scoreAt(q, i){
+  const N=flat.n; let j=i, sc=0;
+  for(let t=0; t<q.length && j<N.length; t++){
+    if(match(q[t], N[j])){ sc++; j++; }
+    else if(j+1<N.length && match(q[t], N[j+1])){ sc++; j+=2; }          // a word was skipped
+    else if(t+1<q.length && match(q[t+1], N[j])){ }                       // extra noise word
+    else j++;                                                             // wrong word
+  }
+  return sc;
+}
+
+/* Best place in the Quran for spoken words q, if it is clear enough. */
+function locate(q, minScore){
+  const k=q.length; if(k<3 || !flat) return null;
+  const starts=new Set(positionsOf(q[0]));
+  for(const p of positionsOf(q[1])) if(p>0) starts.add(p-1);
+  const cands=[];
+  for(const i of starts) cands.push({i, sc:scoreAt(q,i)});
+  if(!cands.length) return null;
+  let best=cands[0]; cands.forEach(c=>{ if(c.sc>best.sc) best=c; });
+  let second=0; cands.forEach(c=>{ if(Math.abs(c.i-best.i)>k && c.sc>second) second=c.sc; });
+  if(best.sc < Math.max(minScore||3, Math.ceil(0.6*k)) || best.sc<=second) return null;
+  return {i:best.i, q};
+}
+
+function detectFeed(toks, isFinal){
+  const all=detBuf.concat(toks);
+  if(isFinal) detBuf=all.slice(-20);
+  let q=stripPrefix(stripPrefix(all, ISTIADHA), BASMALA);
+  if(q.length>15) q=q.slice(-12);
+  const hit=locate(q);
+  if(hit){ if(!isFinal) dropNext=toks.length; lockOn(hit.i, hit.q); }
+}
+
+function startDetect(){
+  detecting=true; autoMode=true; detBuf=[]; lostBuf=[]; pending=[]; dropNext=0;
+  words=[]; committed={pos:0, marks:[]}; curSurah=0;
+  $('#mushaf').innerHTML='<div class="empty">اقرأ من أي مكان في القرآن… هيتعرّف على السورة والآية تلقائيًا</div>';
+  showMsg(''); updateStats();
+}
+
+function lockOn(i, q){
+  detecting=false; detBuf=[]; lostBuf=[];
+  const sn=flat.s[i], an=flat.a[i];
+  renderSurah(sn, an, surahs[sn-1].numberOfAyahs);
+  jumpTo(flat.w[i]);
+  commitTokens(q);
+  render(committed);
+  showMsg(`تم التعرّف: ${surahs[sn-1].name} — من الآية ${toAr(an)}`);
 }
 
 /* ---------- Rendering ---------- */
@@ -260,11 +384,18 @@ function updateStats(){
 
 let doneShown=false;
 function checkDone(st){
-  if(st.pos<words.length || doneShown || st!==committed) return;
+  if(!words.length || st.pos<words.length || doneShown || st!==committed) return;
   doneShown=true;
-  stopListening();
   const errs=countErrors(committed), total=words.length;
-  showMsg(errs ? `انتهيت ✔ — ${toAr(errs)} خطأ من ${toAr(total)} كلمة. راجع المواضع الملوّنة.` : `ما شاء الله! ${toAr(total)} كلمة بدون أخطاء.`);
+  const text = errs ? `انتهيت ✔ — ${toAr(errs)} خطأ من ${toAr(total)} كلمة. راجع المواضع الملوّنة.` : `ما شاء الله! ${toAr(total)} كلمة بدون أخطاء.`;
+  if(autoMode && listening){
+    // keep listening: whatever is recited next gets detected again
+    detecting=true; detBuf=[]; lostBuf=[]; pending=[];
+    showMsg(text+' كمّل قراءة من أي مكان وهيتعرّف عليها.');
+    return;
+  }
+  stopListening();
+  showMsg(text);
 }
 
 function showMsg(t, warn){
@@ -302,6 +433,9 @@ async function init(){
     const saved=store.get('q_sel');
     if(saved){ sel.value=saved.s; $('#from').value=saved.f; $('#to').value=saved.t; setMode(saved.m||'read'); }
     else onSurahChange();
+    buildFlat();
+    $('#mic').disabled=false; $('#autoBtn').disabled=false;
+    $('#mushaf').innerHTML='<div class="empty">دوس المايك واقرأ من أي مكان — هيتعرّف على السورة والآية لوحده.<br>أو اختار سورة ودوس «تحميل».</div>';
   }catch(e){
     showMsg('تعذّر تحميل نص القرآن — أعد تحميل الصفحة.', true);
   }
@@ -313,13 +447,21 @@ function onSurahChange(){
   $('#from').max=$('#to').max=s.numberOfAyahs;
 }
 
-async function loadSelection(){
+function loadSelection(){
   stopListening();
+  autoMode=false; detecting=false; dropNext=0;
   const n=+$('#surah').value, s=surahs[n-1]; if(!s) return;
   let f=Math.max(1, +$('#from').value||1), t=Math.min(s.numberOfAyahs, +$('#to').value||s.numberOfAyahs);
   if(t<f) t=f;
-  $('#from').value=f; $('#to').value=t;
   store.set('q_sel',{s:n,f,t,m:mode});
+  renderSurah(n, f, t);
+}
+
+function renderSurah(n, f, t){
+  const s=surahs[n-1];
+  curSurah=n;
+  $('#surah').value=n; $('#from').value=f; $('#to').value=t;
+  $('#from').max=$('#to').max=s.numberOfAyahs;
   const box=$('#mushaf');
   const data={ayahs:s.ayahs.map((text,i)=>({text, numberInSurah:i+1}))};
   box.innerHTML=''; words=[];
@@ -329,9 +471,7 @@ async function loadSelection(){
   }
   const frag=document.createDocumentFragment();
   data.ayahs.filter(a=>a.numberInSurah>=f && a.numberInSurah<=t).forEach(a=>{
-    let toks=a.text.split(/\s+/).filter(x=>norm(x));
-    if(n!==1 && a.numberInSurah===1 && toks.slice(0,4).map(norm).join(' ')==='بسم الله الرحمن الرحيم') toks=toks.slice(4);
-    toks.forEach(tx=>{
+    ayahTokens(n, a.numberInSurah, a.text).forEach(tx=>{
       const el=document.createElement('span');
       el.className='w'; el.textContent=tx;
       const idx=words.length;
@@ -348,8 +488,8 @@ async function loadSelection(){
 }
 
 function reset(){
-  committed={pos:0, marks:[]}; pending=[]; doneShown=false; lastScroll=-1;
-  showMsg(''); $('#heard').textContent='اضغط المايك وابدأ القراءة';
+  committed={pos:0, marks:[]}; pending=[]; lostBuf=[]; doneShown=false; lastScroll=-1;
+  showMsg(''); if(!listening) $('#heard').textContent='اضغط المايك وابدأ القراءة';
   render(committed);
 }
 
@@ -432,9 +572,52 @@ if(window.claude && claude.use){
   }).catch(()=>{});
 }
 
+/* Android app (Capacitor): native speech recognizer. Each recognizer session
+   streams cumulative partials; the last one is committed when the session ends,
+   then a new session starts while the user is still reciting. */
+const NSR = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+  && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
+let nSession='', nTimer=null, nFails=0;
+if(NSR){
+  NSR.addListener('partialResults', d=>{
+    const t=d && d.matches && d.matches[0];
+    if(t){ nSession=t; nFails=0; preview(t); heard(t); }
+  });
+  NSR.addListener('listeningState', d=>{
+    if(d.status!=='stopped') return;
+    clearTimeout(nTimer);
+    nTimer=setTimeout(()=>{            // give the final result a moment to arrive
+      if(nSession){ commitSpoken(nSession); nSession=''; render(committed); }
+      if(listening) setTimeout(nativeStart, 150);
+    }, 500);
+  });
+}
+function nativeStart(){
+  if(!listening) return;
+  nSession='';
+  NSR.start({language:'ar-SA', partialResults:true, popup:false, maxResults:1}).catch(err=>{
+    const m=String(err && err.message || err);
+    if(/permission/i.test(m)){ listening=false; updateMic(); showMsg('لازم تسمح للتطبيق باستخدام المايك من إعدادات الموبايل.', true); return; }
+    if(++nFails>8){ listening=false; updateMic(); showMsg('التعرف على الصوت وقف — دوس المايك تاني.', true); }
+  });
+}
+async function startNative(){
+  listening=true; updateMic(); showMsg('');
+  try{
+    const av=await NSR.available();
+    if(!av.available){ listening=false; updateMic(); showMsg('الموبايل ده مفيهوش خدمة تعرف على الصوت. ثبّت أو حدّث تطبيق Google.', true); return; }
+    let p=await NSR.checkPermissions();
+    if(p.speechRecognition!=='granted') p=await NSR.requestPermissions();
+    if(p.speechRecognition!=='granted'){ listening=false; updateMic(); showMsg('لازم تسمح للتطبيق باستخدام المايك عشان التسميع يشتغل.', true); return; }
+  }catch(e){}
+  nFails=0; nativeStart();
+}
+
 function startListening(){
-  if(committed.pos>=words.length) reset();
+  if(!words.length || detecting) startDetect();
+  else if(committed.pos>=words.length) reset();
   doneShown=false;
+  if(NSR){ startNative(); return; }
   if(dict){
     listening=true; updateMic(); showMsg('');
     dict.start({language:'ar'}).catch(e=>{ if(e && e.code!=='stopped') dictFailed(e.code); });
@@ -447,6 +630,7 @@ function startListening(){
 }
 function stopListening(){
   listening=false;
+  if(NSR){ clearTimeout(nTimer); NSR.stop().catch(()=>{}); if(nSession){ commitSpoken(nSession); nSession=''; } }
   if(dict && dict.active()) dict.stop().catch(()=>{});
   if(rec){ try{ rec.stop(); }catch{} rec=null; }
   updateMic(); render(committed);
@@ -460,12 +644,13 @@ function updateMic(){
 /* ---------- Wiring ---------- */
 $('#surah').onchange=onSurahChange;
 $('#load').onclick=loadSelection;
+$('#autoBtn').onclick=()=>{ stopListening(); startDetect(); startListening(); };
 $('#modeRead').onclick=()=>setMode('read');
 $('#modeHide').onclick=()=>setMode('hide');
 $('#mic').onclick=()=> listening ? stopListening() : startListening();
 $('#hintBtn').onclick=hint;
 $('#resetBtn').onclick=()=>{ stopListening(); reset(); };
-if(!SR || /debug/.test(location.search)){
+if((!SR && !NSR) || /debug/.test(location.search)){
   $('#debug').hidden=false;
   const send=()=>{ commitSpoken($('#debugText').value); render(committed); $('#heard').textContent='⌨ '+$('#debugText').value; $('#debugText').value=''; };
   $('#debugSend').onclick=send;
