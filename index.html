@@ -1031,7 +1031,7 @@ async function startNative(){
 const LOCAL_LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/+esm';
 const LOCAL_MODEL='nael239/tasme3-whisper-base-ar-quran-web';
 const LOCAL_OK=!NSR && !window.claude && !!navigator.mediaDevices && !!window.AudioWorkletNode;
-const LOC={asr:null, worker:null, loading:null, ctx:null, stream:null, buf:[], len:0, speaking:false, quiet:0, since:0, busy:false, floor:.004};
+const LOC={lastLen:0, asr:null, worker:null, loading:null, ctx:null, stream:null, buf:[], len:0, speaking:false, quiet:0, since:0, busy:false, floor:.004};
 $('#localRow').hidden=!LOCAL_OK;
 /* Inference runs in a worker so the page never freezes while the model decodes. The encoder is
    fed only as many mel frames as the clip has (min 10 s) instead of Whisper's fixed 30 s window,
@@ -1096,11 +1096,12 @@ function localFeed(f){
   if(voiced && !LOC.speaking){ LOC.speaking=true; LOC.since=0; }
   if(!LOC.speaking){ LOC.buf.push(f); LOC.len+=f.length; while(LOC.len>4800 && LOC.buf.length>1){ LOC.len-=LOC.buf.shift().length; } return; }   // keep 0.3 s lead-in
   LOC.buf.push(f); LOC.len+=f.length; LOC.since+=ms; LOC.quiet = voiced ? 0 : LOC.quiet+ms;
-  if(LOC.quiet>=700 || LOC.len>=16000*20){
-    LOC.speaking=false; LOC.quiet=0;
-    if(LOC.len>16000*.5) localDecode(true, localAudio());
+  // end of phrase: a short pause (or a 10 s cap, to keep each decode cheap)
+  if(LOC.quiet>=350 || LOC.len>=16000*10){
+    LOC.speaking=false; LOC.quiet=0; LOC.lastLen=0;
+    if(LOC.len>16000*.4) localDecode(true, localAudio());
     LOC.buf=[]; LOC.len=0;
-  } else if(LOC.since>=1500){ LOC.since=0; localDecode(false); }
+  } else if(!LOC.busy && LOC.len-LOC.lastLen>=16000*.25){ LOC.lastLen=LOC.len; localDecode(false); }   // as fast as the device allows: decode again the moment the last one returns and 0.25 s of new speech is in
 }
 async function startLocal(){
   listening=true; updateMic(); showMsg('');
