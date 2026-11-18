@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<meta charset="utf-8">
+<title>تسميع القرآن</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ee; --card:#ffffff; --text:#1f2a24; --muted:#6b756f; --line:#e2ddcf;
+  --accent:#1f7a55; --accent-soft:#e3f1ea;
+  --bad:#c0392b; --bad-soft:#fbe4e1; --skip:#a8650a; --skip-soft:#fbefd9;
+  --hint:#2e6da4; --hint-soft:#e2edf7; --mask:#d9d3c3;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111513; --card:#1a201d; --text:#e8ece9; --muted:#98a29c; --line:#2c3430;
+    --accent:#4fbf8b; --accent-soft:#1c3a2c;
+    --bad:#ef6b5e; --bad-soft:#3d201d; --skip:#e3a94c; --skip-soft:#3a2e18;
+    --hint:#6aa8e0; --hint-soft:#1b2b3c; --mask:#38413c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111513; --card:#1a201d; --text:#e8ece9; --muted:#98a29c; --line:#2c3430;
+  --accent:#4fbf8b; --accent-soft:#1c3a2c;
+  --bad:#ef6b5e; --bad-soft:#3d201d; --skip:#e3a94c; --skip-soft:#3a2e18;
+  --hint:#6aa8e0; --hint-soft:#1b2b3c; --mask:#38413c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Tajawal,system-ui,sans-serif;font-size:16px}
+.wrap{max-width:900px;margin:0 auto;padding-block:16px 140px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1{font-size:22px;margin:4px 0 14px;display:flex;align-items:center;gap:8px}
+h1 small{font-size:13px;color:var(--muted);font-weight:400}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+select,input[type=number],input[type=text]{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 10px;min-height:40px}
+select{min-width:180px}
+input[type=number]{width:80px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--text);font:inherit;padding:9px 14px;cursor:pointer;min-height:40px}
+.seg button[aria-pressed=true]{background:var(--accent);color:#fff}
+.chk{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--text);min-height:40px}
+button.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:9px 14px;cursor:pointer;min-height:40px}
+button.btn:hover{border-color:var(--accent)}
+button.btn:disabled{opacity:.5;cursor:default}
+.mushaf{margin-top:14px;padding:22px 18px;font-family:"Amiri Quran",Amiri,serif;font-size:30px;line-height:2.4;text-align:justify;min-height:200px}
+.basmala{text-align:center;margin-bottom:6px;color:var(--muted)}
+.w{padding:0 3px;border-radius:7px;cursor:pointer;transition:background .15s,color .15s;user-select:none}
+.w.ok{color:var(--accent)}
+.w.bad{color:var(--bad);background:var(--bad-soft)}
+.w.skip{color:var(--skip);background:var(--skip-soft)}
+.w.hint{color:var(--hint);background:var(--hint-soft)}
+.w.cur{outline:2px dashed var(--accent);outline-offset:2px}
+.mask .w:not(.ok):not(.bad):not(.skip):not(.hint){color:transparent;background:var(--mask);border-radius:6px}
+.mask .w.cur:not(.ok){background:var(--accent-soft)}
+.an{font-size:.75em;color:var(--accent);margin:0 4px;white-space:nowrap}
+.empty{font-family:Tajawal,sans-serif;font-size:16px;color:var(--muted);text-align:center;padding:40px 0}
+.bar{position:fixed;inset:auto 0 0 0;background:var(--card);border-top:1px solid var(--line);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar .in{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mic{width:60px;height:60px;border-radius:50%;border:0;background:var(--accent);color:#fff;cursor:pointer;display:grid;place-items:center;flex:none}
+.mic.on{background:var(--bad);animation:pulse 1.4s infinite}
+.mic:disabled{opacity:.5;cursor:default}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--bad) 50%,transparent)}100%{box-shadow:0 0 0 14px transparent}}
+.heard{flex:1;min-width:160px;font-size:14px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.stats{display:flex;gap:12px;font-size:14px}
+.stats b{font-weight:700}
+.s-ok{color:var(--accent)}.s-bad{color:var(--bad)}.s-skip{color:var(--skip)}.s-hint{color:var(--hint)}
+.errors{margin-top:14px}
+.errors h2{font-size:16px;margin:0 0 8px}
+.errors ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.errors li{border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:14px;cursor:pointer}
+.errors li .q{font-family:"Amiri Quran",serif;font-size:18px}
+.msg{margin-top:10px;font-size:14px;padding:10px 12px;border-radius:10px;background:var(--accent-soft)}
+.msg.warn{background:var(--bad-soft)}
+.debug{margin-top:10px;display:flex;gap:8px}
+.debug input{flex:1}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted);margin-top:10px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:5px;vertical-align:middle;background:currentColor}
+@media (max-width:600px){.mushaf{font-size:24px;padding:16px 10px}.stats{gap:8px;font-size:13px}}
+@media (prefers-reduced-motion:reduce){.mic.on{animation:none}.w{transition:none}}
+</style>
+<div dir="rtl" lang="ar">
+<div class="wrap">
+  <h1>تسميع القرآن <small>اقرأ وهو بيتابعك ويكشف الأخطاء</small></h1>
+
+  <div class="card">
+    <div class="controls">
+      <label class="field">السورة<select id="surah"><option>جارِ التحميل…</option></select></label>
+      <label class="field">من آية<input id="from" type="number" min="1" value="1"></label>
+      <label class="field">إلى آية<input id="to" type="number" min="1" value="7"></label>
+      <div class="field">الوضع
+        <div class="seg" role="group">
+          <button id="modeRead" aria-pressed="true">عرض النص</button>
+          <button id="modeHide" aria-pressed="false">وضع الحفظ</button>
+        </div>
+      </div>
+      <label class="chk"><input id="beep" type="checkbox" checked> تنبيه صوتي عند الخطأ</label>
+      <button class="btn" id="load">تحميل</button>
+    </div>
+    <div class="legend">
+      <span class="s-ok">صحيح</span><span class="s-bad">خطأ في الكلمة</span><span class="s-skip">كلمة ناقصة</span><span class="s-hint">تلميح</span>
+      <span style="color:var(--muted)">اضغط على أي كلمة لتبدأ منها</span>
+    </div>
+    <div id="msg"></div>
+    <div class="debug" id="debug" hidden>
+      <input id="debugText" type="text" placeholder="اكتب ما قرأته هنا (للتجربة بدون مايك)">
+      <button class="btn" id="debugSend">إرسال</button>
+    </div>
+  </div>
+
+  <div class="card mushaf" id="mushaf"><div class="empty">اختر سورة ثم اضغط «تحميل»</div></div>
+
+  <div class="card errors" id="errors" hidden><h2>مواضع الأخطاء</h2><ul id="errList"></ul></div>
+  <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:16px">نص القرآن الكريم من مشروع تنزيل — tanzil.net</p>
+</div>
+
+<div class="bar">
+  <div class="in">
+    <button class="mic" id="mic" aria-label="ابدأ التسميع" disabled>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <div class="heard" id="heard">اضغط المايك وابدأ القراءة</div>
+    <div class="stats">
+      <span class="s-ok">✓ <b id="cOk">0</b></span>
+      <span class="s-bad">✗ <b id="cBad">0</b></span>
+      <span class="s-skip">⤼ <b id="cSkip">0</b></span>
+      <span class="s-hint">💡 <b id="cHint">0</b></span>
+    </div>
+    <button class="btn" id="hintBtn" disabled>تلميح</button>
+    <button class="btn" id="resetBtn" disabled>إعادة</button>
+  </div>
+</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch{ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+};
+
+/* ---------- Arabic normalization & matching ---------- */
+const DIAC = /[ؐ-ًؚ-ٰٟۖ-ۭـ]/g;
+function norm(w){
+  return (w||'').replace(DIAC,'')
+    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه')
+    .replace(/ؤ/g,'و').replace(/ئ/g,'ي').replace(/ء/g,'')
+    .replace(/[^ء-ي]/g,'');
+}
+const tokenize = t => (t||'').split(/\s+/).map(norm).filter(Boolean);
+const toAr = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+
+function lev(a,b){
+  let prev = Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+    const cur=[i];
+    for(let j=1;j<=b.length;j++)
+      cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;
+  }
+  return prev[b.length];
+}
+function match(s,e){
+  if(!s||!e) return false;
+  if(s===e) return true;
+  const min=Math.min(s.length,e.length);
+  if(min<=2) return false;                       // short words must be exact
+  return 1 - lev(s,e)/Math.max(s.length,e.length) >= (min<=4 ? 0.75 : 0.7);
+}
+
+/* ---------- State ---------- */
+let words=[];          // {text, n, ayah, el}
+let committed={pos:0, marks:[]};   // marks[i] = {s:'ok'|'bad'|'skip'|'hint', said?}
+let pending=[];        // unresolved spoken words carried between final results
+let listening=false, rec=null, finalUpTo=0, mode='read', lastScroll=-1;
+let surahs=[];
+
+/* Align spoken (normalized) words against expected text starting at st.pos.
+   Returns the spoken words that could not be resolved yet. */
+function align(st, spoken){
+  let i=0;
+  while(i<spoken.length && st.pos<words.length){
+    const s=spoken[i], next=spoken[i+1], j=st.pos;
+    if(match(s, words[j].n)){ st.marks[j]={s:'ok'}; st.pos++; i++; continue; }
+    if(j+1<words.length && match(s, words[j].n+words[j+1].n)){
+      st.marks[j]={s:'ok'}; st.marks[j+1]={s:'ok'}; st.pos+=2; i++; continue;
+    }
+    if(j>0 && match(s, words[j-1].n)){ i++; continue; }      // repeated previous word
+    if(next===undefined) break;                              // need more evidence
+    // skipped words: spoken word matches a word a little ahead, confirmed by the following word
+    let k=-1;
+    for(let d=1; d<=3 && j+d<words.length; d++){
+      if(match(s, words[j+d].n) && (j+d+1>=words.length || match(next, words[j+d+1].n))){ k=j+d; break; }
+    }
+    if(k>0){
+      for(let t=j;t<k;t++) st.marks[t]={s:'skip'};
+      st.marks[k]={s:'ok'}; st.pos=k+1; i++; continue;
+    }
+    // wrong word: next spoken word lines up with the following expected word
+    if(j+1<words.length && match(next, words[j+1].n)){
+      st.marks[j]={s:'bad', said:s}; st.pos++; i++; continue;
+    }
+    i++;                                                     // noise / self-correction
+  }
+  return spoken.slice(i);
+}
+
+function countErrors(st){ return st.marks.filter(m=>m && (m.s==='bad'||m.s==='skip')).length; }
+
+function commitSpoken(text){
+  const before=countErrors(committed);
+  pending = align(committed, pending.concat(tokenize(text))).slice(-3);
+  if(countErrors(committed)>before) alertError();
+}
+
+function preview(interim){
+  const st={pos:committed.pos, marks:committed.marks.slice()};
+  if(interim) align(st, pending.concat(tokenize(interim)));
+  render(st);
+}
+
+/* ---------- Rendering ---------- */
+function render(st){
+  for(let i=0;i<words.length;i++){
+    const m=st.marks[i], el=words[i].el;
+    let c='w'+(m?' '+m.s:'')+(i===st.pos?' cur':'');
+    if(el.className!==c) el.className=c;
+    el.title = m && m.s==='bad' ? 'سُمع: '+m.said : '';
+  }
+  if(st.pos!==lastScroll && words[st.pos]){
+    lastScroll=st.pos;
+    const r=words[st.pos].el.getBoundingClientRect();
+    if(r.top<80 || r.bottom>innerHeight-120) words[st.pos].el.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+  updateStats();
+  if(st===committed || st.pos>=words.length) checkDone(st);
+}
+
+function updateStats(){
+  const c={ok:0,bad:0,skip:0,hint:0};
+  committed.marks.forEach(m=>{ if(m) c[m.s]++; });
+  $('#cOk').textContent=c.ok; $('#cBad').textContent=c.bad;
+  $('#cSkip').textContent=c.skip; $('#cHint').textContent=c.hint;
+  const errs=[];
+  committed.marks.forEach((m,i)=>{ if(m && (m.s==='bad'||m.s==='skip')) errs.push(i); });
+  $('#errors').hidden=!errs.length;
+  $('#errList').innerHTML='';
+  errs.forEach(i=>{
+    const li=document.createElement('li');
+    const m=committed.marks[i];
+    li.innerHTML=`<span class="q"></span> — آية ${toAr(words[i].ayah)} ${m.s==='skip'?'(ناقصة)':''}`;
+    li.querySelector('.q').textContent=words[i].text;
+    if(m.s==='bad') li.title='سُمع: '+m.said;
+    li.onclick=()=>words[i].el.scrollIntoView({behavior:'smooth',block:'center'});
+    $('#errList').appendChild(li);
+  });
+}
+
+let doneShown=false;
+function checkDone(st){
+  if(st.pos<words.length || doneShown || st!==committed) return;
+  doneShown=true;
+  stopListening();
+  const errs=countErrors(committed), total=words.length;
+  showMsg(errs ? `انتهيت ✔ — ${toAr(errs)} خطأ من ${toAr(total)} كلمة. راجع المواضع الملوّنة.` : `ما شاء الله! ${toAr(total)} كلمة بدون أخطاء.`);
+}
+
+function showMsg(t, warn){
+  $('#msg').innerHTML = t ? `<div class="msg${warn?' warn':''}"></div>` : '';
+  if(t) $('#msg .msg').textContent=t;
+}
+
+/* ---------- Error feedback ---------- */
+let actx=null;
+function alertError(){
+  try{ navigator.vibrate && navigator.vibrate(120); }catch{}
+  if(!$('#beep').checked) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.frequency.value=330; o.type='sine';
+    g.gain.setValueAtTime(0.15, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+0.25);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+0.25);
+  }catch{}
+}
+
+/* ---------- Loading Quran text (bundled quran.json) ---------- */
+async function init(){
+  try{
+    const r=await fetch('quran.json');
+    if(!r.ok) throw new Error(r.status);
+    surahs=(await r.json()).map(s=>({...s, numberOfAyahs:s.ayahs.length}));
+    const sel=$('#surah'); sel.innerHTML='';
+    surahs.forEach(s=>{
+      const o=document.createElement('option');
+      o.value=s.number; o.textContent=`${toAr(s.number)}. ${s.name.replace(/^سُورَةُ\s*/,'')} (${toAr(s.numberOfAyahs)})`;
+      sel.appendChild(o);
+    });
+    const saved=store.get('q_sel');
+    if(saved){ sel.value=saved.s; $('#from').value=saved.f; $('#to').value=saved.t; setMode(saved.m||'read'); }
+    else onSurahChange();
+  }catch(e){
+    showMsg('تعذّر تحميل نص القرآن — أعد تحميل الصفحة.', true);
+  }
+}
+
+function onSurahChange(){
+  const s=surahs[$('#surah').value-1]; if(!s) return;
+  $('#from').value=1; $('#to').value=s.numberOfAyahs;
+  $('#from').max=$('#to').max=s.numberOfAyahs;
+}
+
+async function loadSelection(){
+  stopListening();
+  const n=+$('#surah').value, s=surahs[n-1]; if(!s) return;
+  let f=Math.max(1, +$('#from').value||1), t=Math.min(s.numberOfAyahs, +$('#to').value||s.numberOfAyahs);
+  if(t<f) t=f;
+  $('#from').value=f; $('#to').value=t;
+  store.set('q_sel',{s:n,f,t,m:mode});
+  const box=$('#mushaf');
+  const data={ayahs:s.ayahs.map((text,i)=>({text, numberInSurah:i+1}))};
+  box.innerHTML=''; words=[];
+  if(n!==1 && n!==9 && f===1){
+    const b=document.createElement('div'); b.className='basmala';
+    b.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; box.appendChild(b);
+  }
+  const frag=document.createDocumentFragment();
+  data.ayahs.filter(a=>a.numberInSurah>=f && a.numberInSurah<=t).forEach(a=>{
+    let toks=a.text.split(/\s+/).filter(x=>norm(x));
+    if(n!==1 && a.numberInSurah===1 && toks.slice(0,4).map(norm).join(' ')==='بسم الله الرحمن الرحيم') toks=toks.slice(4);
+    toks.forEach(tx=>{
+      const el=document.createElement('span');
+      el.className='w'; el.textContent=tx;
+      const idx=words.length;
+      el.onclick=()=>jumpTo(idx);
+      words.push({text:tx, n:norm(tx), ayah:a.numberInSurah, el});
+      frag.appendChild(el); frag.appendChild(document.createTextNode(' '));
+    });
+    const an=document.createElement('span'); an.className='an'; an.textContent='﴿'+toAr(a.numberInSurah)+'﴾';
+    frag.appendChild(an); frag.appendChild(document.createTextNode(' '));
+  });
+  box.appendChild(frag);
+  reset();
+  ['#mic','#hintBtn','#resetBtn'].forEach(id=>$(id).disabled=false);
+}
+
+function reset(){
+  committed={pos:0, marks:[]}; pending=[]; doneShown=false; lastScroll=-1;
+  showMsg(''); $('#heard').textContent='اضغط المايك وابدأ القراءة';
+  render(committed);
+}
+
+function jumpTo(i){
+  committed.pos=i; pending=[]; doneShown=false;
+  for(let k=i;k<words.length;k++) committed.marks[k]=undefined;
+  render(committed);
+}
+
+function hint(){
+  if(committed.pos>=words.length) return;
+  committed.marks[committed.pos]={s:'hint'}; committed.pos++; pending=[];
+  render(committed);
+}
+
+function setMode(m){
+  mode=m;
+  $('#modeRead').setAttribute('aria-pressed', m==='read');
+  $('#modeHide').setAttribute('aria-pressed', m==='hide');
+  $('#mushaf').classList.toggle('mask', m==='hide');
+  const s=store.get('q_sel'); if(s){ s.m=m; store.set('q_sel',s); }
+}
+
+/* ---------- Speech recognition ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function startRec(){
+  rec=new SR();
+  rec.lang='ar-SA'; rec.continuous=true; rec.interimResults=true; rec.maxAlternatives=1;
+  finalUpTo=0;
+  rec.onresult=e=>{
+    let finals='', interim='';
+    for(let r=e.resultIndex; r<e.results.length; r++){
+      const res=e.results[r];
+      if(res.isFinal){ if(r>=finalUpTo){ finals+=' '+res[0].transcript; finalUpTo=r+1; } }
+      else interim+=' '+res[0].transcript;
+    }
+    if(finals.trim()) commitSpoken(finals);
+    preview(interim);
+    const shown=(interim||finals).trim();
+    if(shown) $('#heard').textContent='🎧 '+shown;
+  };
+  rec.onerror=e=>{
+    if(e.error==='not-allowed' || e.error==='service-not-allowed'){
+      listening=false; updateMic();
+      showMsg('لم يُسمح باستخدام المايك. اسمح بالوصول للمايك من إعدادات المتصفح.', true);
+    } else if(e.error==='network'){
+      listening=false; updateMic();
+      showMsg('التعرّف على الصوت يحتاج إنترنت. تأكد من الاتصال.', true);
+    }
+  };
+  rec.onend=()=>{ if(listening){ try{ startRec(); }catch{ listening=false; updateMic(); } } };
+  rec.start();
+}
+
+/* Claude dictation (when hosted on claude.ai), with the browser's own recognizer as fallback */
+let dict=null;
+const heard = t => { if(t) $('#heard').textContent='🎧 '+t; };
+const DICT_ERR = {
+  not_granted:'لم يُسمح باستخدام المايك. اسمح به من قائمة الأذونات (Permissions) أعلى الصفحة.',
+  rate_limited:'ضغط كبير على خدمة الصوت — حاول بعد لحظات.',
+  upstream_error:'حصلت مشكلة في المايك أو خدمة الصوت — حاول تاني.'
+};
+function dictFailed(code){
+  listening=false; updateMic();
+  if(code==='unavailable'){
+    dict=null;
+    showMsg(SR ? 'خدمة الإملاء العربي مش متاحة هنا — اضغط المايك تاني لاستخدام التعرف على الصوت من المتصفح.' : 'التعرف على الصوت بالعربي مش متاح في المتصفح ده. استخدم Chrome أو Edge.', true);
+  } else if(DICT_ERR[code]) showMsg(DICT_ERR[code], true);
+}
+if(window.claude && claude.use){
+  claude.use('dictation').then(d=>{
+    if(!d) return;
+    dict=d;
+    d.onPartial(({text})=>{ preview(text); heard(text); });
+    d.onFinal(({text})=>{ commitSpoken(text); preview(''); heard(text); });
+    d.onState(({state,reason})=>{
+      if(state==='idle' && listening){ if(reason==='stopped'||reason==='viewer_stopped'||reason==='hidden'){ listening=false; updateMic(); } else dictFailed(reason); }
+    });
+  }).catch(()=>{});
+}
+
+function startListening(){
+  if(committed.pos>=words.length) reset();
+  doneShown=false;
+  if(dict){
+    listening=true; updateMic(); showMsg('');
+    dict.start({language:'ar'}).catch(e=>{ if(e && e.code!=='stopped') dictFailed(e.code); });
+    return;
+  }
+  if(window.claude){ showMsg('المايك مش متاح في النسخة دي على claude.ai — افتح نسخة الموقع المستقلة من البرنامج.', true); return; }
+  if(!SR){ showMsg('المتصفح ده مش بيدعم التعرف على الصوت. استخدم Google Chrome أو Microsoft Edge.', true); return; }
+  listening=true; updateMic();
+  try{ startRec(); }catch{ listening=false; updateMic(); }
+}
+function stopListening(){
+  listening=false;
+  if(dict && dict.active()) dict.stop().catch(()=>{});
+  if(rec){ try{ rec.stop(); }catch{} rec=null; }
+  updateMic(); render(committed);
+}
+function updateMic(){
+  $('#mic').classList.toggle('on', listening);
+  $('#mic').setAttribute('aria-label', listening?'إيقاف':'ابدأ التسميع');
+  if(!listening && $('#heard').textContent.startsWith('🎧')) $('#heard').textContent='متوقف — اضغط المايك للمتابعة';
+}
+
+/* ---------- Wiring ---------- */
+$('#surah').onchange=onSurahChange;
+$('#load').onclick=loadSelection;
+$('#modeRead').onclick=()=>setMode('read');
+$('#modeHide').onclick=()=>setMode('hide');
+$('#mic').onclick=()=> listening ? stopListening() : startListening();
+$('#hintBtn').onclick=hint;
+$('#resetBtn').onclick=()=>{ stopListening(); reset(); };
+if(!SR || /debug/.test(location.search)){
+  $('#debug').hidden=false;
+  const send=()=>{ commitSpoken($('#debugText').value); render(committed); $('#heard').textContent='⌨ '+$('#debugText').value; $('#debugText').value=''; };
+  $('#debugSend').onclick=send;
+  $('#debugText').onkeydown=e=>{ if(e.key==='Enter') send(); };
+}
+init();
+</script>
+
+</html>
