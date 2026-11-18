@@ -238,6 +238,7 @@ input[type=number]{width:78px}
     <label class="chk"><input id="tjOn" type="checkbox" checked> ألوان التجويد</label>
     <label class="chk"><input id="simOn" type="checkbox"> إظهار المتشابهات</label>
     <label class="chk"><input id="recOn" type="checkbox" checked> سجّل صوتي عند الخطأ</label>
+    <label class="chk" id="localRow" hidden><input id="localOn" type="checkbox"> تعرّف محلي على جهازك بدون إنترنت (تجريبي، تحميل نحو ١٠٠ ميجا)</label>
   </div>
   <div class="tjlegend" id="tjLegend">
     <span style="color:#ff9a3d">غنة</span><span style="color:#ff5a5f">قلقلة</span><span style="color:#c56ff0">إخفاء</span>
@@ -1022,11 +1023,96 @@ async function startNative(){
   nFails=0; nativeStart();
 }
 
+/* Local engine (opt-in, web only): a Whisper model fine-tuned on Quran recitation runs on this
+   device through transformers.js (downloaded once, cached by the browser; audio never leaves the
+   device). Whisper is not a streaming recognizer, so a small segmenter feeds it the current
+   utterance: re-decoded every ~1.5 s as the live preview, decoded once more when the reader pauses
+   (the final text), the same preview()/commitSpoken() contract as the other engines. */
+const LOCAL_LIB='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/+esm';
+const LOCAL_MODEL='nael239/tasme3-whisper-base-ar-quran-web';
+const LOCAL_OK=!NSR && !window.claude && !!navigator.mediaDevices && !!window.AudioWorkletNode;
+const LOC={asr:null, loading:null, ctx:null, stream:null, buf:[], len:0, speaking:false, quiet:0, since:0, busy:false, floor:.004};
+$('#localRow').hidden=!LOCAL_OK;
+function localLoad(){
+  if(LOC.asr) return Promise.resolve(LOC.asr);
+  if(LOC.loading) return LOC.loading;
+  return LOC.loading=(async()=>{
+    const {pipeline, env}=await import(LOCAL_LIB);
+    env.useBrowserCache=true;
+    const seen={};
+    LOC.asr=await pipeline('automatic-speech-recognition', LOCAL_MODEL, {dtype:'q8', progress_callback:p=>{
+      if(p.status==='progress' && p.total>5e6){ seen[p.file]=p; let l=0,t=0; for(const k in seen){ l+=seen[k].loaded; t+=seen[k].total; }
+        showMsg('جارِ تحميل نموذج التعرف المحلي (مرة واحدة فقط)… '+toAr(Math.round(100*l/t))+'٪'); }
+    }});
+    showMsg('');
+    return LOC.asr;
+  })().catch(e=>{ LOC.loading=null; throw e; });
+}
+async function localDecode(final){
+  if(LOC.busy){ if(final) LOC.pendingFinal=true; return; }
+  LOC.busy=true;
+  const a=new Float32Array(LOC.len); let o=0; for(const c of LOC.buf){ a.set(c,o); o+=c.length; }
+  try{
+    const out=await LOC.asr(a, {language:'arabic', task:'transcribe'});
+    const t=((out && out.text)||'').trim();
+    if(listening || final){ if(final){ if(t) commitSpoken(t); preview(''); } else preview(t); }
+    if(t) heard(t);
+  }catch(e){ console.warn('local ASR', e); }
+  LOC.busy=false;
+  if(LOC.pendingFinal){ LOC.pendingFinal=false; if(LOC.len) localDecode(true); }
+}
+function localFeed(f){
+  let s=0; for(let i=0;i<f.length;i++) s+=f[i]*f[i];
+  const rms=Math.sqrt(s/f.length), ms=f.length/16;
+  const voiced=rms>Math.max(.012, LOC.floor*3);
+  if(!voiced && !LOC.speaking) LOC.floor=LOC.floor*.98+rms*.02;      // learn the room noise while silent
+  if(voiced && !LOC.speaking){ LOC.speaking=true; LOC.since=0; }
+  if(!LOC.speaking){ LOC.buf.push(f); LOC.len+=f.length; while(LOC.len>4800 && LOC.buf.length>1){ LOC.len-=LOC.buf.shift().length; } return; }   // keep 0.3 s lead-in
+  LOC.buf.push(f); LOC.len+=f.length; LOC.since+=ms; LOC.quiet = voiced ? 0 : LOC.quiet+ms;
+  if(LOC.quiet>=700 || LOC.len>=16000*20){
+    LOC.speaking=false; LOC.quiet=0;
+    if(LOC.len>16000*.5) localDecode(true);
+    LOC.buf=[]; LOC.len=0;
+  } else if(LOC.since>=1500){ LOC.since=0; localDecode(false); }
+}
+async function startLocal(){
+  listening=true; updateMic(); showMsg('');
+  try{
+    if(!LOC.asr && !localStorage.getItem('faris_local_ok')){
+      if(!confirm('التعرف المحلي يحمّل نموذجًا حجمه نحو ١٠٠ ميجا مرة واحدة، ثم يشتغل على جهازك بدون إنترنت. نكمل؟')){ listening=false; updateMic(); $('#localOn').checked=false; applyOpts(); return; }
+      try{ localStorage.setItem('faris_local_ok','1'); }catch{}
+    }
+    await localLoad();
+    if(!listening) return;
+    LOC.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:true, autoGainControl:true}});
+    LOC.ctx=new AudioContext({sampleRate:16000});
+    const url=URL.createObjectURL(new Blob(['registerProcessor("faris-tap",class extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c)this.port.postMessage(c.slice());return true}})'],{type:'text/javascript'}));
+    await LOC.ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+    const tap=new AudioWorkletNode(LOC.ctx,'faris-tap');
+    // worklet frames are 128 samples: gather ~100 ms before analysing
+    let acc=[], n=0;
+    tap.port.onmessage=e=>{ acc.push(e.data); n+=e.data.length; if(n>=1600){ const f=new Float32Array(n); let o=0; for(const c of acc){ f.set(c,o); o+=c.length; } acc=[]; n=0; localFeed(f); } };
+    LOC.ctx.createMediaStreamSource(LOC.stream).connect(tap);
+    LOC.buf=[]; LOC.len=0; LOC.speaking=false; LOC.quiet=0;
+  }catch(e){
+    listening=false; updateMic(); stopLocal();
+    const m=String(e && (e.name||e.message)||e);
+    showMsg(/NotAllowed|Permission/i.test(m) ? 'لم يُسمح باستخدام المايك. اسمح بالوصول للمايك من إعدادات المتصفح.' : 'تعذّر تشغيل التعرف المحلي ('+m+'). جرّب التعرف العادي من القائمة ☰.', true);
+  }
+}
+function stopLocal(){
+  if(LOC.speaking && LOC.len>16000*.5 && LOC.asr) localDecode(true);
+  LOC.speaking=false; LOC.buf=[]; LOC.len=0;
+  if(LOC.stream){ LOC.stream.getTracks().forEach(t=>t.stop()); LOC.stream=null; }
+  if(LOC.ctx){ LOC.ctx.close().catch(()=>{}); LOC.ctx=null; }
+}
+
 function startListening(){
   if(!words.length || detecting) startDetect();
   else if(committed.pos>=words.length) reset();
   doneShown=false;
   if(NSR){ startNative(); return; }
+  if(LOCAL_OK && $('#localOn').checked){ startLocal(); return; }
   if(dict){
     listening=true; updateMic(); showMsg('');
     dict.start({language:'ar'}).catch(e=>{ if(e && e.code!=='stopped') dictFailed(e.code); });
@@ -1041,6 +1127,7 @@ function stopListening(){
   listening=false;
   if(NSR){ clearTimeout(nTimer); NSR.stop().catch(()=>{}); if(nSession){ commitSpoken(nSession); nSession=''; } }
   if(dict && dict.active()) dict.stop().catch(()=>{});
+  stopLocal();
   if(rec){ try{ rec.stop(); }catch{} rec=null; }
   updateMic(); render(committed);
 }
@@ -1377,14 +1464,14 @@ function applyOpts(){
   $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
   $('#tjLegend').hidden=!$('#tjOn').checked;
   applySim();
-  store.set('q_opts', {tj:$('#tjOn').checked, sim:$('#simOn').checked, rec:$('#recOn').checked, beep:$('#beep').checked});
+  store.set('q_opts', {tj:$('#tjOn').checked, sim:$('#simOn').checked, rec:$('#recOn').checked, beep:$('#beep').checked, local:$('#localOn').checked});
 }
 (function(){
   const o=store.get('q_opts');
-  if(o){ $('#tjOn').checked=o.tj!==false; $('#simOn').checked=!!o.sim; $('#recOn').checked=o.rec!==false; $('#beep').checked=o.beep!==false; }
+  if(o){ $('#tjOn').checked=o.tj!==false; $('#simOn').checked=!!o.sim; $('#recOn').checked=o.rec!==false; $('#beep').checked=o.beep!==false; $('#localOn').checked=!!o.local; }
   // on phones a second mic user can starve speech recognition: recording starts off there
   else if(/Android|iPhone|iPad/i.test(navigator.userAgent)) $('#recOn').checked=false;
-  ['#tjOn','#simOn','#recOn','#beep'].forEach(id=>$(id).onchange=applyOpts);
+  ['#tjOn','#simOn','#recOn','#beep','#localOn'].forEach(id=>$(id).onchange=applyOpts);
   $('#mushaf').classList.toggle('tj', $('#tjOn').checked);
   $('#tjLegend').hidden=!$('#tjOn').checked;
   $('#mushaf').classList.toggle('sim', $('#simOn').checked);
