@@ -37,7 +37,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .info .meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 
 /* settings sheet */
-.sheet{max-width:760px;margin:0 auto;background:var(--bar);border:1px solid var(--edge);border-top:0;border-radius:0 0 16px 16px;padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.sheet{max-height:calc(100vh - 64px);overflow-y:auto;max-width:760px;margin:0 auto;background:var(--bar);border:1px solid var(--edge);border-top:0;border-radius:0 0 16px 16px;padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px}
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 .field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 select,input[type=number],input[type=text]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--edge);border-radius:9px;padding:8px 10px;min-height:42px}
@@ -127,7 +127,7 @@ input[type=number]{width:78px}
 .msg{background:var(--surface2);border:1px solid var(--edge);border-radius:12px;padding:10px 14px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);pointer-events:auto}
 .msg.warn{border-color:var(--bad);color:#ffd9d5}
 /* settings screen: grouped rows (icon, label, switch / chevron) on dark cards */
-.sets{gap:10px}
+.sets{display:flex;flex-direction:column;gap:10px}
 .sets h3{margin:12px 6px 0;font-size:13px;font-weight:500;color:var(--muted)}
 .sets .grp{background:var(--surface);border:1px solid var(--edge);border-radius:20px;overflow:hidden}
 .sets .row{display:flex;align-items:center;gap:14px;width:100%;min-height:58px;padding:10px 16px;border:0;background:none;color:var(--ink);font:inherit;font-size:16px;text-align:start;cursor:pointer;text-decoration:none;position:relative}
@@ -329,9 +329,6 @@ input[type=number]{width:78px}
     <button class="ib" id="autoBtn" aria-label="اكتشاف تلقائي للسورة" title="اكتشاف تلقائي" disabled>
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     </button>
-    <button class="ib" id="setBtn" aria-label="الإعدادات" title="الإعدادات">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
     <button class="ib" id="statsBtn" aria-label="الإحصائيات والأهداف وسجل الأخطاء" title="الإحصائيات">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
     </button>
@@ -370,6 +367,50 @@ input[type=number]{width:78px}
     <input id="debugText" type="text" placeholder="اكتب ما قرأته هنا (للتجربة بدون مايك)">
     <button class="btn" id="debugSend">إرسال</button>
   </div>
+  <div class="sets">
+    <button class="prof" id="acctBtn" type="button">
+      <span class="av"><svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="#flogo"/></svg></span>
+      <span class="who"><b id="acctName">زائر</b><small id="acctSub">سجّل دخولك لتحتفظ ببياناتك</small></span>
+      <i class="chev"></i>
+    </button>
+
+    <h3>التسميع</h3>
+    <div class="grp">
+      <label class="row"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0"/></svg><span>تنبيه صوتي عند الخطأ</span><input id="beep" class="sw" type="checkbox" checked></label>
+      <label class="row"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2 2M20 12a8 8 0 0 1-14 5l-2-2M20 4v5h-5M4 20v-5h5"/></svg><span>بعد ما أخلص: ٣ تنبيهات وبعدها يتبعني في أي مكان<small>يسمعك ويكمّل من أي سورة تقرأ منها</small></span><input id="followOn" class="sw" type="checkbox" checked></label>
+      <label class="row"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>سجّل صوتي عند الخطأ<small>مقاطع قصيرة بتتحفظ على جهازك بس</small></span><input id="recOn" class="sw" type="checkbox" checked></label>
+      <label class="row"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>عزل صوت القارئ<small>يتجاهل الأصوات الأضعف والأبعد عن المايك (مع التعرّف المحلي)</small></span><input id="isoOn" class="sw" type="checkbox" checked></label>
+      <label class="row" id="localRow" hidden><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>تعرّف محلي بدون إنترنت<small>تجريبي — تحميل نحو ١٠٠ ميجا، وبيفعّل العزل</small></span><input id="localOn" class="sw" type="checkbox"></label>
+      <label class="row" id="tkRow" hidden><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg><span>مراجعة التشكيل أثناء القراءة<small>تجريبي — تحميل نحو ٢٤٠ ميجا</small></span><input id="tkOn" class="sw" type="checkbox"></label>
+    </div>
+
+    <h3>العرض</h3>
+    <div class="grp">
+      <label class="row"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="16" cy="10" r="1"/></svg><span>ألوان التجويد</span><input id="tjOn" class="sw" type="checkbox" checked></label>
+      <label class="row"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span>إظهار الآيات المتشابهة</span><input id="simOn" class="sw" type="checkbox"></label>
+      <label class="row"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5"/></svg><span>طبعة المصحف وتقسيم السطور</span><select id="edSel"><option value="lines">سطور مصحف المدينة (١٥ سطر)</option><option value="fahd">طبعة الملك فهد (صور SVG)</option></select></label>
+    </div>
+
+    <h3>المحتوى</h3>
+    <div class="grp">
+      <button class="row" id="dlBtn" type="button"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span>تنزيل كتب وتفاسير وأشكال المصحف</span><i class="chev"></i></button>
+      <button class="row" id="setStats" type="button"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>الإحصائيات والأهداف</span><i class="chev"></i></button>
+    </div>
+
+    <h3>عن فارس</h3>
+    <div class="grp">
+      <a class="row" href="https://sayedfares.github.io/tasmee3/privacy.html" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>سياسة الخصوصية</span><i class="chev"></i></a>
+      <a class="row" href="https://sayedfares.github.io/tasmee3/delete-account.html" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span>حذف الحساب والبيانات</span><i class="chev"></i></a>
+      <details class="row det"><summary><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>مصادر البيانات</span><i class="chev"></i></summary>
+        <div class="cred">
+          <p>نص القرآن الكريم ونص التجويد من مشروع تنزيل (tanzil.net) وموقع alquran.cloud</p>
+          <p>ترتيب الكلمات على سطور مصحف المدينة من بيانات quran.com، وتقسيمات السطور الأخرى من بيانات QUL (مجمع الملك فهد)</p>
+          <p>التفسير الميسر والإعراب (الدعاس، النحاس) من الموسوعة القرآنية quranpedia.net — نسخة ٢٠٢٦-٠٨-١٠</p>
+        </div>
+      </details>
+    </div>
+
+    <button class="outbtn" id="acctOut" type="button"><svg viewBox="0 0 24 24"><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9"/></svg><span id="acctOutLabel">تسجيل الدخول</span></button></div>
 </div>
 
 <main class="wrap">
@@ -459,55 +500,6 @@ input[type=number]{width:78px}
     </div>
     <div class="err" id="authErr" role="alert"></div>
     <button class="link" id="authSkip">تخطّي دلوقتي</button>
-  </div>
-</section>
-
-<section class="panel" id="setPanel" hidden aria-label="الإعدادات">
-  <div class="ph"><button class="ib" data-close aria-label="رجوع"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button><h2>الإعدادات</h2></div>
-  <div class="pb sets">
-    <button class="prof" id="acctBtn" type="button">
-      <span class="av"><svg viewBox="0 0 1024 1024" aria-hidden="true"><use href="#flogo"/></svg></span>
-      <span class="who"><b id="acctName">زائر</b><small id="acctSub">سجّل دخولك لتحتفظ ببياناتك</small></span>
-      <i class="chev"></i>
-    </button>
-
-    <h3>التسميع</h3>
-    <div class="grp">
-      <label class="row"><svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0"/></svg><span>تنبيه صوتي عند الخطأ</span><input id="beep" class="sw" type="checkbox" checked></label>
-      <label class="row"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5l2 2M20 12a8 8 0 0 1-14 5l-2-2M20 4v5h-5M4 20v-5h5"/></svg><span>بعد ما أخلص: ٣ تنبيهات وبعدها يتبعني في أي مكان<small>يسمعك ويكمّل من أي سورة تقرأ منها</small></span><input id="followOn" class="sw" type="checkbox" checked></label>
-      <label class="row"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>سجّل صوتي عند الخطأ<small>مقاطع قصيرة بتتحفظ على جهازك بس</small></span><input id="recOn" class="sw" type="checkbox" checked></label>
-      <label class="row"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>عزل صوت القارئ<small>يتجاهل الأصوات الأضعف والأبعد عن المايك (مع التعرّف المحلي)</small></span><input id="isoOn" class="sw" type="checkbox" checked></label>
-      <label class="row" id="localRow" hidden><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>تعرّف محلي بدون إنترنت<small>تجريبي — تحميل نحو ١٠٠ ميجا، وبيفعّل العزل</small></span><input id="localOn" class="sw" type="checkbox"></label>
-      <label class="row" id="tkRow" hidden><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg><span>مراجعة التشكيل أثناء القراءة<small>تجريبي — تحميل نحو ٢٤٠ ميجا</small></span><input id="tkOn" class="sw" type="checkbox"></label>
-    </div>
-
-    <h3>العرض</h3>
-    <div class="grp">
-      <label class="row"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="16" cy="10" r="1"/></svg><span>ألوان التجويد</span><input id="tjOn" class="sw" type="checkbox" checked></label>
-      <label class="row"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span>إظهار الآيات المتشابهة</span><input id="simOn" class="sw" type="checkbox"></label>
-      <label class="row"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5"/></svg><span>طبعة المصحف وتقسيم السطور</span><select id="edSel"><option value="lines">سطور مصحف المدينة (١٥ سطر)</option><option value="fahd">طبعة الملك فهد (صور SVG)</option></select></label>
-    </div>
-
-    <h3>المحتوى</h3>
-    <div class="grp">
-      <button class="row" id="dlBtn" type="button"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span>تنزيل كتب وتفاسير وأشكال المصحف</span><i class="chev"></i></button>
-      <button class="row" id="setStats" type="button"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>الإحصائيات والأهداف</span><i class="chev"></i></button>
-    </div>
-
-    <h3>عن فارس</h3>
-    <div class="grp">
-      <a class="row" href="https://sayedfares.github.io/tasmee3/privacy.html" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>سياسة الخصوصية</span><i class="chev"></i></a>
-      <a class="row" href="https://sayedfares.github.io/tasmee3/delete-account.html" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span>حذف الحساب والبيانات</span><i class="chev"></i></a>
-      <details class="row det"><summary><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>مصادر البيانات</span><i class="chev"></i></summary>
-        <div class="cred">
-          <p>نص القرآن الكريم ونص التجويد من مشروع تنزيل (tanzil.net) وموقع alquran.cloud</p>
-          <p>ترتيب الكلمات على سطور مصحف المدينة من بيانات quran.com، وتقسيمات السطور الأخرى من بيانات QUL (مجمع الملك فهد)</p>
-          <p>التفسير الميسر والإعراب (الدعاس، النحاس) من الموسوعة القرآنية quranpedia.net — نسخة ٢٠٢٦-٠٨-١٠</p>
-        </div>
-      </details>
-    </div>
-
-    <button class="outbtn" id="acctOut" type="button"><svg viewBox="0 0 24 24"><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9"/></svg><span id="acctOutLabel">تسجيل الدخول</span></button>
   </div>
 </section>
 
@@ -2695,11 +2687,10 @@ $('#authReset').onclick=()=>{
   authDo(async()=>{ await fbMod.sendPasswordResetEmail(fbAuth, em); authErr('بعتنا لك رابط إعادة تعيين كلمة المرور على بريدك.'); });
 };
 $('#authSkip').onclick=()=>{ store.set('q_auth_skip', 1); authForced=false; authPaint(); };
-const authOpen=()=>{ closePanels(); authForced=true; authErr(''); authPaint(); };
-$('#acctBtn').onclick=()=>{ if(!authUser && FIREBASE_CONFIG.apiKey) authOpen(); };
+const authOpen=()=>{ toggleSheet(false); closePanels(); authForced=true; authErr(''); authPaint(); };
+$('#acctBtn').onclick=()=>{ toggleSheet(false); if(!authUser && FIREBASE_CONFIG.apiKey) authOpen(); };
 $('#acctOut').onclick=()=>{ if(authUser) authDo(()=>fbMod.signOut(fbAuth)); else authOpen(); };
-$('#setBtn').onclick=()=>{ toggleSheet(false); openPanel('setPanel'); };
-$('#setStats').onclick=()=>{ $('#statsBtn').click(); };
+$('#setStats').onclick=()=>{ toggleSheet(false); $('#statsBtn').click(); };
 authInit();
 
 init();
