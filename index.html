@@ -269,7 +269,7 @@ input[type=number]{width:78px}
     <label class="chk"><input id="tjOn" type="checkbox" checked> ألوان التجويد</label>
     <label class="chk"><input id="simOn" type="checkbox"> إظهار المتشابهات</label>
     <label class="chk"><input id="recOn" type="checkbox" checked> سجّل صوتي عند الخطأ</label>
-    <label class="chk">طبعة المصحف <select id="edSel"><option value="lines">سطور مصحف المدينة</option><option value="fahd">طبعة الملك فهد</option></select></label>
+    <label class="chk">طبعة المصحف وتقسيم السطور <select id="edSel"><option value="lines">سطور مصحف المدينة (١٥ سطر)</option><option value="fahd">طبعة الملك فهد (صور SVG)</option></select></label>
     <label class="chk" id="tkRow" hidden><input id="tkOn" type="checkbox"> مراجعة التشكيل أثناء القراءة (تجريبي، تحميل نحو ٢٤٠ ميجا)</label>
     <label class="chk" id="localRow" hidden><input id="localOn" type="checkbox"> تعرّف محلي على جهازك بدون إنترنت (تجريبي، تحميل نحو ١٠٠ ميجا)</label>
   </div>
@@ -803,6 +803,13 @@ async function init(){
     surahs=(await r.json()).map(s=>({...s, numberOfAyahs:s.ayahs.length}));
     try{ if(ru && ru.ok) uthmani=await ru.json(); }catch{ uthmani=null; }
     try{ if(rm && rm.ok) mushaf=await rm.json(); }catch{ mushaf=null; }
+    try{                                    // other line layouts (optional): choices in the "mushaf edition" list
+      const rl=await fetch('layouts/index.json'); if(rl.ok) layoutList=await rl.json();
+      layoutList.forEach(l=>{ const o=document.createElement('option'); o.value=l.id; o.textContent=l.name; $('#edSel').appendChild(o); });
+      await useLayout(store.get('q_ed'));
+      if(!LAYS[store.get('q_ed')] && !['lines','fahd'].includes(store.get('q_ed'))) store.set('q_ed','lines');
+      $('#edSel').value=store.get('q_ed')||'lines';
+    }catch{}
     const sel=$('#surah'); sel.innerHTML='';
     surahs.forEach(s=>{
       const o=document.createElement('option');
@@ -849,14 +856,36 @@ function suraBanner(s){
   b.append(box('ترتيبها', s.number), orn(), nm, orn(), box('آياتها', s.numberOfAyahs));
   return b;
 }
-function mushafLines(pn, n, f, t, s, els, body, c=f){     // c = first context ayah (shown dimmed, not tracked)
+/* Other line layouts (layouts/<id>.json, built by tools/build_layouts.py from the QUL databases) have the same
+   format as mushaf.json but break lines and pages differently, so an ayah may span several pages.
+   The chosen one is stored as q_ed ('lines' = Madani, 'fahd' = SVG edition, or a layout id). */
+const LAYS={};                                            // id -> pages, once loaded
+let layoutList=[];
+const curLines = () => LAYS[store.get('q_ed')] || mushaf;
+const spanCache=new WeakMap();
+function ayahSpan(L){                                     // [surah][ayah] -> [first page, last page]
+  let m=spanCache.get(L);
+  if(!m){
+    m={};
+    L.forEach((ls,pi)=>ls.forEach(e=>{ if(typeof e!=='string') e.forEach(([sn,a])=>{
+      const r=(m[sn]||(m[sn]=[]))[a]; if(!r) m[sn][a]=[pi+1,pi+1]; else r[1]=pi+1;
+    }); }));
+    spanCache.set(L,m);
+  }
+  return m;
+}
+async function useLayout(id){
+  if(!layoutList.some(l=>l.id===id) || LAYS[id]) return;
+  try{ const r=await fetch('layouts/'+id+'.json'); if(r.ok) LAYS[id]=await r.json(); }catch{}
+}
+function mushafLines(pn, n, f, t, s, els, body, c, L, pf){     // c = first context ayah (shown dimmed, not tracked); pf(a) = its first page
   body.classList.add('lines');
-  const lines=mushaf[pn-1], used=new Set(); let last=null;
+  const lines=L[pn-1], used=new Set(); let last=null;
   lines.forEach((e,i)=>{
     const ln=document.createElement('div'); ln.className='ln';
     if(typeof e==='string'){
       if(e==='h'+n && f===1){ ln.classList.add('hd'); ln.appendChild(suraBanner(s)); }
-      else if(e==='b' && f===1 && (i ? lines[i-1] : (mushaf[pn-2]||[]).slice(-1)[0])==='h'+n){ ln.classList.add('bs'); ln.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; }
+      else if(e==='b' && f===1 && (i ? lines[i-1] : (L[pn-2]||[]).slice(-1)[0])==='h'+n){ ln.classList.add('bs'); ln.textContent='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ'; }
     } else {
       let partial=false, ends=false;
       e.forEach(([sn,a,w0,w1])=>{
@@ -872,7 +901,7 @@ function mushafLines(pn, n, f, t, s, els, body, c=f){     // c = first context a
   });
   // words the line data does not cover (two ayahs split differently): put them at the end of the page
   for(let a=f; a<=t; a++){
-    if(s.pages[a-1]!==pn) continue;
+    if(pf(a)!==pn) continue;
     els[a].forEach(el=>{ if(!used.has(el) && last) last.appendChild(el); });
   }
 }
@@ -943,11 +972,15 @@ function renderSurah(n, f, t){
   const els={}, pageOrder=[];       // els[ayah] = display words, then the ayah number mark
   // Starting mid-surah: the ayahs before `f` on the previous page and the start page are shown dimmed
   // as context (plain text: not in `words`, not clickable, not tracked).
+  const L = svgMode ? null : curLines();                       // line layout (null: SVG edition or no layout data)
+  const sp = L && L!==mushaf ? ayahSpan(L)[n] : null;          // another layout: its own pages for each ayah
+  const pf = a => sp ? sp[a][0] : s.pages[a-1], pl = a => sp ? sp[a][1] : s.pages[a-1];
+  const addPages = a => { for(let p=pf(a); p<=pl(a); p++) if(!pageOrder.includes(p)) pageOrder.push(p); };
   let c=f;
-  while(c>1 && s.pages[c-2]>=s.pages[f-1]-1) c--;
+  while(c>1 && pf(c-1)>=pf(f)-1) c--;
   for(let ai=c-1; ai<f-1; ai++){
-    const an=ai+1, pageNo=s.pages[ai];
-    if(!pageOrder.includes(pageNo)) pageOrder.push(pageNo);
+    const an=ai+1;
+    addPages(an);
     const plain=ayahTokens(n, an, s.ayahs[ai]);
     const list=els[an]=[]; let pi=0;
     uthmaniWords(n, ai, plain.length).forEach(dw=>{
@@ -958,8 +991,8 @@ function renderSurah(n, f, t){
   }
   for(let ai=f-1; ai<t; ai++){
     const an=ai+1;
-    const pageNo=s.pages[ai];
-    if(!pageOrder.includes(pageNo)) pageOrder.push(pageNo);
+    const pageNo=pf(an);
+    addPages(an);
     // Matching runs on the plain words; the page shows Uthmani words with tajweed.
     // One Uthmani word can stand for several plain words (يَـٰٓأَيُّهَا = يا أيها):
     // the first plain word owns the visible span, the others point at it.
@@ -983,13 +1016,13 @@ function renderSurah(n, f, t){
     list.push(mk);
   }
   // the banner and basmala can sit at the bottom of the page before the first ayah's page
-  const bannerPage = !svgMode && mushaf && f===1 && mushaf[pageOrder[0]-2] && mushaf[pageOrder[0]-2].includes('h'+n) ? pageOrder[0]-1 : 0;
+  const bannerPage = L && f===1 && L[pageOrder[0]-2] && L[pageOrder[0]-2].includes('h'+n) ? pageOrder[0]-1 : 0;
   if(bannerPage) pageOrder.unshift(bannerPage);
   pageOrder.forEach((pn,k)=>{
     const pg=document.createElement('section'); pg.className='page'; pg.dataset.pn=pn;
     if(k){ const d=document.createElement('div'); d.className='pdiv'; d.textContent='صفحة '+toAr(pn); pg.appendChild(d); }
     const body=document.createElement('div'); body.className='pt'; pg.appendChild(body);
-    (svgMode ? mushafSvg(pn, n, s, els, pg, body) : mushaf ? mushafLines(pn, n, f, t, s, els, body, c) : mushafFlow(pn, n, f, t, s, els, body));
+    (svgMode ? mushafSvg(pn, n, s, els, pg, body) : L ? mushafLines(pn, n, f, t, s, els, body, c, L, pf) : mushafFlow(pn, n, f, t, s, els, body));
     frag.appendChild(pg);
   });
   box.appendChild(frag);
@@ -1800,8 +1833,11 @@ function applyOpts(){
   $('#mushaf').classList.toggle('sim', $('#simOn').checked);
 })();
 $('#edSel').value=fahdOn() ? 'fahd' : 'lines';
-$('#edSel').onchange=()=>{
-  store.set('q_ed', $('#edSel').value);
+$('#edSel').onchange=async()=>{
+  const v=$('#edSel').value;
+  await useLayout(v);
+  store.set('q_ed', v==='fahd' || v==='lines' || LAYS[v] ? v : 'lines');
+  if(!LAYS[v] && v!=='fahd' && v!=='lines'){ $('#edSel').value='lines'; showMsg('تعذّر تحميل التقسيم ده.', true); }
   if(words.length && committed.pos===0) renderSurah(curSurah, +$('#from').value, +$('#to').value);
   else if(words.length) showMsg('طبعة المصحف هتتغيّر في الفتح الجاي للسورة.');
 };
