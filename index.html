@@ -398,8 +398,11 @@ function align(st, spoken, final){
     if(k>=0){ st.back=k+1; st.miss=0; i++; continue; }       // went back to re-read
     // live text may still change: wait for the next word unless this one is clearly wrong
     if(!final && spoken[i+1]===undefined && !clearlyWrong(s, words[j].n)) break;
-    st.marks[j]={s:'bad', said:s, open:true};
+    // a mistake: the word stays open for another try; after 3 wrong tries it is shown and passed
+    const tries=(open && m.tries||0)+1;
     st.wrong=(st.wrong||0)+1; i++;
+    if(tries>=3){ st.marks[j]={s:'bad', said:s, shown:true}; st.pos++; }
+    else st.marks[j]={s:'bad', said:s, open:true, tries};
   }
   return spoken.slice(i);
 }
@@ -1038,7 +1041,7 @@ function trackProgress(pos0){
   const metBefore=goalsMet();
   for(let i=pos0; i<committed.pos; i++){
     const m=committed.marks[i];
-    if(!m || m.s==='hint') continue;
+    if(!m || m.s==='hint' || m.open) continue;          // hints and words left missed weren't recited
     d.words++; sv.words++;
     const last = i+1>=words.length || words[i+1].ayah!==words[i].ayah;
     if(last) d.ayahs++;
